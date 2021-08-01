@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/anchore/stereoscope/pkg/file"
 	"github.com/anchore/stereoscope/pkg/filetree"
@@ -308,12 +309,19 @@ func (r *directoryResolver) FileMetadataByLocation(location Location) (FileMetad
 		return FileMetadata{}, fmt.Errorf("location: %+v : %w", location, os.ErrNotExist)
 	}
 
+	uid := -1
+	gid := -1
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		uid = int(stat.Uid)
+		gid = int(stat.Gid)
+	}
+
 	return FileMetadata{
 		Mode: info.Mode(),
 		Type: newFileTypeFromMode(info.Mode()),
 		// unsupported across platforms
-		UserID:  -1,
-		GroupID: -1,
+		UserID:  uid,
+		GroupID: gid,
 	}, nil
 }
 

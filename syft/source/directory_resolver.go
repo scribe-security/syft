@@ -326,6 +326,8 @@ func indexAllRoots(root string, indexer func(string, *progress.Stage) ([]string,
 	// in which case we need to additionally index where the link resolves to. it's for this reason why the filetree
 	// must be relative to the root of the filesystem (and not just relative to the given path).
 	pathsToIndex := []string{root}
+	fullPathsMap := map[string]struct{}{}
+
 	stager, prog := indexingProgress(root)
 	defer prog.SetCompleted()
 loop:
@@ -344,7 +346,13 @@ loop:
 		if err != nil {
 			return fmt.Errorf("unable to index filesystem path=%q: %w", currentPath, err)
 		}
-		pathsToIndex = append(pathsToIndex, additionalRoots...)
+
+		for _, newRoot := range additionalRoots {
+			if _, ok := fullPathsMap[newRoot]; !ok {
+				fullPathsMap[newRoot] = struct{}{}
+				pathsToIndex = append(pathsToIndex, newRoot)
+			}
+		}
 	}
 
 	return nil

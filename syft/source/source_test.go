@@ -77,7 +77,6 @@ func TestNewFromDirectory(t *testing.T) {
 			assert.NoError(t, err)
 
 			refs, err := resolver.FilesByPath(test.inputPaths...)
-
 			if err != nil {
 				t.Errorf("FilesByPath call produced an error: %+v", err)
 			}
@@ -85,8 +84,8 @@ func TestNewFromDirectory(t *testing.T) {
 				t.Errorf("unexpected number of refs returned: %d != %d", len(refs), test.expRefs)
 
 			}
-		})
 
+		})
 	}
 }
 

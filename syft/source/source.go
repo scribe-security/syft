@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/anchore/stereoscope"
-	"github.com/anchore/stereoscope/pkg/filetree"
 	"github.com/anchore/stereoscope/pkg/image"
 	"github.com/spf13/afero"
 )
@@ -18,10 +17,10 @@ import (
 // Source is an object that captures the data source to be cataloged, configuration, and a specific resolver used
 // in cataloging (based on the data source and configuration)
 type Source struct {
-	Image    *image.Image // the image object to be cataloged (image only)
-	Tree     *filetree.FileTree
-	Metadata Metadata
-	Mutex    *sync.Mutex
+	Image             *image.Image // the image object to be cataloged (image only)
+	DirectoryResolver *directoryResolver
+	Metadata          Metadata
+	Mutex             *sync.Mutex
 }
 
 type sourceDetector func(string) (image.Source, string, error)
@@ -72,7 +71,6 @@ func New(userInput string, registryOptions *image.RegistryOptions) (Source, func
 // NewFromDirectory creates a new source object tailored to catalog a given filesystem directory recursively.
 func NewFromDirectory(path string) (Source, error) {
 	return Source{
-		Tree:  filetree.NewFileTree(),
 		Mutex: &sync.Mutex{},
 		Metadata: Metadata{
 			Scheme: DirectoryScheme,
@@ -97,12 +95,19 @@ func NewFromImage(img *image.Image, userImageStr string) (Source, error) {
 	}, nil
 }
 
-func (s Source) FileResolver(scope Scope) (FileResolver, error) {
+func (s *Source) FileResolver(scope Scope) (FileResolver, error) {
 	switch s.Metadata.Scheme {
 	case DirectoryScheme:
 		s.Mutex.Lock()
 		defer s.Mutex.Unlock()
-		return newDirectoryResolver(s.Tree, s.Metadata.Path)
+		if s.DirectoryResolver == nil {
+			directoryResolver, err := newDirectoryResolver(s.Metadata.Path)
+			if err != nil {
+				return nil, err
+			}
+			s.DirectoryResolver = directoryResolver
+		}
+		return s.DirectoryResolver, nil
 	case ImageScheme:
 		switch scope {
 		case SquashedScope:

@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/google/uuid"
+
 	"github.com/anchore/syft/internal"
 	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/internal/version"
@@ -11,7 +13,6 @@ import (
 	"github.com/anchore/syft/syft/linux"
 	"github.com/anchore/syft/syft/sbom"
 	"github.com/anchore/syft/syft/source"
-	"github.com/google/uuid"
 )
 
 func ToFormatModel(s sbom.SBOM) *cyclonedx.BOM {
@@ -27,7 +28,7 @@ func ToFormatModel(s sbom.SBOM) *cyclonedx.BOM {
 	packages := s.Artifacts.PackageCatalog.Sorted()
 	components := make([]cyclonedx.Component, len(packages))
 	for i, p := range packages {
-		components[i] = Component(p)
+		components[i] = encodeComponent(p)
 	}
 	components = append(components, toOSComponent(s.Artifacts.LinuxDistribution)...)
 	cdxBOM.Components = &components
@@ -74,18 +75,27 @@ func toOSComponent(distro *linux.Release) []cyclonedx.Component {
 	if len(*eRefs) == 0 {
 		eRefs = nil
 	}
-	props := getCycloneDXProperties(*distro)
-	if len(*props) == 0 {
-		props = nil
+	props := encodeProperties(distro, "syft:distro")
+	var properties *[]cyclonedx.Property
+	if len(props) > 0 {
+		properties = &props
 	}
 	return []cyclonedx.Component{
 		{
-			Type:               cyclonedx.ComponentTypeOS,
-			Name:               distro.Name,
-			Version:            distro.Version,
+			Type: cyclonedx.ComponentTypeOS,
+			// FIXME is it idiomatic to be using SWID here for specific name and version information?
+			SWID: &cyclonedx.SWID{
+				TagID:   distro.ID,
+				Name:    distro.ID,
+				Version: distro.VersionID,
+			},
+			Description: distro.PrettyName,
+			Name:        distro.ID,
+			Version:     distro.VersionID,
+			// TODO should we add a PURL?
 			CPE:                distro.CPEName,
 			ExternalReferences: eRefs,
-			Properties:         props,
+			Properties:         properties,
 		},
 	}
 }

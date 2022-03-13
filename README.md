@@ -312,7 +312,7 @@ package:
 
   # enable specific language or ecosystem cataloger
   # default: all catalogers are enabled by default
-  # enable-cataloger:
+  # catalogers:
   # - "ruby-gemfile-cataloger"
   # - "ruby-gemspec-cataloger"
   # - "python-index-cataloger"
@@ -326,7 +326,7 @@ package:
   # - "java-cataloger"
   # - "apkdb-cataloger"
   # - "go-module-binary-cataloger"
-  enable-cataloger:
+  catalogers:
 
 # cataloging file classifications is exposed through the power-user subcommand
 file-classification:

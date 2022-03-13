@@ -43,7 +43,7 @@ func ImageCatalogers(cfg Config) []Cataloger {
 		java.NewJavaCataloger(cfg.Java()),
 		apkdb.NewApkdbCataloger(),
 		golang.NewGoModuleBinaryCataloger(),
-	}, cfg.EnabledCatalogers)
+	}, cfg.Catalogers)
 }
 
 // DirectoryCatalogers returns a slice of locally implemented catalogers that are fit for detecting packages from index files (and select installations)
@@ -61,7 +61,7 @@ func DirectoryCatalogers(cfg Config) []Cataloger {
 		golang.NewGoModuleBinaryCataloger(),
 		golang.NewGoModFileCataloger(),
 		rust.NewCargoLockCataloger(),
-	}, cfg.EnabledCatalogers)
+	}, cfg.Catalogers)
 }
 
 // AllCatalogers returns all implemented catalogers
@@ -80,7 +80,7 @@ func AllCatalogers(cfg Config) []Cataloger {
 		golang.NewGoModuleBinaryCataloger(),
 		golang.NewGoModFileCataloger(),
 		rust.NewCargoLockCataloger(),
-	}, cfg.EnabledCatalogers)
+	}, cfg.Catalogers)
 }
 
 func filterCatalogers(catalogers []Cataloger, enabledCatalogers []string) []Cataloger {

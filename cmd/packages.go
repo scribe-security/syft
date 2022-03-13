@@ -135,7 +135,7 @@ func setPackageFlags(flags *pflag.FlagSet) {
 	)
 
 	flags.StringArrayP(
-		"enable-cataloger", "", nil,
+		"catalogers", "", nil,
 		"enable specific language or ecosystem cataloger",
 	)
 
@@ -178,7 +178,7 @@ func bindExclusivePackagesConfigOptions(flags *pflag.FlagSet) error {
 		return err
 	}
 
-	if err := viper.BindPFlag("package.enable-cataloger", flags.Lookup("enable-cataloger")); err != nil {
+	if err := viper.BindPFlag("package.catalogers", flags.Lookup("catalogers")); err != nil {
 		return err
 	}
 

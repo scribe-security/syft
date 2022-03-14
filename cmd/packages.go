@@ -137,28 +137,23 @@ func setPackageFlags(flags *pflag.FlagSet) {
 	)
 
 	flags.StringArrayP(
-		"exclude", "", nil,
-		"exclude paths from being scanned using a glob expression",
+		"exclude", "", nil, "exclude paths from being scanned using a glob expression",
 	)
 
 	flags.StringArrayP(
-		"cataloger", "C", nil,
-		"enable specific language or ecosystem cataloger",
+		"cataloger", "C", nil, "enable specific language or ecosystem cataloger",
 	)
 
 	flags.StringP(
-		"cataloger-group", "", "",
-		fmt.Sprintf("selection cataloger group, options=%v", cataloger.AllGroups),
+		"cataloger-group", "", "", fmt.Sprintf("selection cataloger group, options=%v", cataloger.AllGroups),
 	)
 
 	flags.Bool(
-		"overwrite-existing-image", false,
-		"overwrite an existing image during the upload to Anchore Enterprise",
+		"overwrite-existing-image", false, "overwrite an existing image during the upload to Anchore Enterprise",
 	)
 
 	flags.Uint(
-		"import-timeout", 30,
-		"set a timeout duration (in seconds) for the upload to Anchore Enterprise",
+		"import-timeout", 30, "set a timeout duration (in seconds) for the upload to Anchore Enterprise",
 	)
 }
 

@@ -311,8 +311,13 @@ package:
     # same as -s ; SYFT_PACKAGE_CATALOGER_SCOPE env var
     scope: "squashed"
 
+  # Cataloger group select 
+  # When Empty default select for each scheme - Dir:Index, Image:installed
+  # Options: [index install all].
+  # cataloger-group: ""
+
   # enable specific language or ecosystem cataloger
-  # default: all catalogers are enabled by default
+  # default: select catalogers out of group
   # catalogers:
   # - "ruby-gemfile-cataloger"
   # - "ruby-gemspec-cataloger"

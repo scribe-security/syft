@@ -10,6 +10,7 @@ import (
 	"github.com/anchore/syft/internal"
 	"github.com/anchore/syft/internal/anchore"
 	"github.com/anchore/syft/internal/bus"
+	"github.com/anchore/syft/internal/config"
 	"github.com/anchore/syft/internal/formats/table"
 	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/internal/ui"
@@ -82,7 +83,7 @@ var (
 				defer profile.Start(profile.MemProfile).Stop()
 			}
 
-			return packagesExec(cmd, args)
+			return packagesExec(cmd, args, appConfig)
 		},
 		ValidArgsFunction: dockerImageValidArgsFunction,
 	}
@@ -221,8 +222,8 @@ func validateInputArgs(cmd *cobra.Command, args []string) error {
 	return cobra.MaximumNArgs(1)(cmd, args)
 }
 
-func packagesExec(_ *cobra.Command, args []string) error {
-	writer, err := makeWriter(appConfig.Outputs, appConfig.File)
+func packagesExec(_ *cobra.Command, args []string, cfg *config.Application) error {
+	writer, err := makeWriter(cfg.Outputs, cfg.File)
 	if err != nil {
 		return err
 	}
@@ -235,21 +236,23 @@ func packagesExec(_ *cobra.Command, args []string) error {
 
 	// could be an image or a directory, with or without a scheme
 	userInput := args[0]
-	si, err := source.ParseInput(userInput, appConfig.Platform, true)
+	si, err := source.ParseInput(userInput, cfg.Platform, true)
 	if err != nil {
 		return fmt.Errorf("could not generate source input for packages command: %w", err)
 	}
 
+	_, errs := packagesExecWorker(*si, cfg, writer)
+
 	return eventLoop(
-		packagesExecWorker(*si, writer),
+		errs,
 		setupSignals(),
 		eventSubscription,
 		stereoscope.Cleanup,
-		ui.Select(isVerbose(), appConfig.Quiet)...,
+		ui.Select(isVerbose(cfg), cfg.Quiet)...,
 	)
 }
 
-func isVerbose() (result bool) {
+func isVerbose(cfg *config.Application) (result bool) {
 	isPipedInput, err := internal.IsPipedInput()
 	if err != nil {
 		// since we can't tell if there was piped input we assume that there could be to disable the ETUI
@@ -257,11 +260,11 @@ func isVerbose() (result bool) {
 		return true
 	}
 	// verbosity should consider if there is piped input (in which case we should not show the ETUI)
-	return appConfig.CliOptions.Verbosity > 0 || isPipedInput
+	return cfg.CliOptions.Verbosity > 0 || isPipedInput
 }
 
-func generateSBOM(src *source.Source, errs chan error) (*sbom.SBOM, error) {
-	tasks, err := tasks()
+func generateSBOM(src *source.Source, cfg *config.Application, errs chan error) (*sbom.SBOM, error) {
+	tasks, err := tasks(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +274,7 @@ func generateSBOM(src *source.Source, errs chan error) (*sbom.SBOM, error) {
 		Descriptor: sbom.Descriptor{
 			Name:          internal.ApplicationName,
 			Version:       version.FromBuild().Version,
-			Configuration: appConfig,
+			Configuration: cfg,
 		},
 	}
 
@@ -291,12 +294,14 @@ func buildRelationships(s *sbom.SBOM, src *source.Source, tasks []task, errs cha
 	s.Relationships = append(s.Relationships, mergeRelationships(relationships...)...)
 }
 
-func packagesExecWorker(si source.Input, writer sbom.Writer) <-chan error {
+func packagesExecWorker(si source.Input, cfg *config.Application, writer sbom.Writer) (chan *sbom.SBOM, <-chan error) {
 	errs := make(chan error)
+	outSbom := make(chan *sbom.SBOM, 1)
+
 	go func() {
 		defer close(errs)
 
-		src, cleanup, err := source.New(si, appConfig.Registry.ToOptions(), appConfig.Exclusions)
+		src, cleanup, err := source.New(si, cfg.Registry.ToOptions(), cfg.Exclusions)
 		if cleanup != nil {
 			defer cleanup()
 		}
@@ -305,7 +310,7 @@ func packagesExecWorker(si source.Input, writer sbom.Writer) <-chan error {
 			return
 		}
 
-		s, err := generateSBOM(src, errs)
+		s, err := generateSBOM(src, cfg, errs)
 		if err != nil {
 			errs <- err
 			return
@@ -315,8 +320,8 @@ func packagesExecWorker(si source.Input, writer sbom.Writer) <-chan error {
 			errs <- fmt.Errorf("no SBOM produced for %q", si.UserInput)
 		}
 
-		if appConfig.Anchore.Host != "" {
-			if err := runPackageSbomUpload(src, *s); err != nil {
+		if cfg.Anchore.Host != "" {
+			if err := runPackageSbomUpload(src, cfg, *s); err != nil {
 				errs <- err
 				return
 			}
@@ -326,8 +331,13 @@ func packagesExecWorker(si source.Input, writer sbom.Writer) <-chan error {
 			Type:  event.Exit,
 			Value: func() error { return writer.Write(*s) },
 		})
+
+		if s != nil {
+			outSbom <- s
+		}
 	}()
-	return errs
+
+	return outSbom, errs
 }
 
 func mergeRelationships(cs ...<-chan artifact.Relationship) (relationships []artifact.Relationship) {
@@ -340,34 +350,34 @@ func mergeRelationships(cs ...<-chan artifact.Relationship) (relationships []art
 	return relationships
 }
 
-func runPackageSbomUpload(src *source.Source, s sbom.SBOM) error {
-	log.Infof("uploading results to %s", appConfig.Anchore.Host)
+func runPackageSbomUpload(src *source.Source, cfg *config.Application, s sbom.SBOM) error {
+	log.Infof("uploading results to %s", cfg.Anchore.Host)
 
 	if src.Metadata.Scheme != source.ImageScheme {
 		return fmt.Errorf("unable to upload results: only images are supported")
 	}
 
 	var dockerfileContents []byte
-	if appConfig.Anchore.Dockerfile != "" {
-		if _, err := os.Stat(appConfig.Anchore.Dockerfile); os.IsNotExist(err) {
-			return fmt.Errorf("unable dockerfile=%q does not exist: %w", appConfig.Anchore.Dockerfile, err)
+	if cfg.Anchore.Dockerfile != "" {
+		if _, err := os.Stat(cfg.Anchore.Dockerfile); os.IsNotExist(err) {
+			return fmt.Errorf("unable dockerfile=%q does not exist: %w", cfg.Anchore.Dockerfile, err)
 		}
 
-		fh, err := os.Open(appConfig.Anchore.Dockerfile)
+		fh, err := os.Open(cfg.Anchore.Dockerfile)
 		if err != nil {
-			return fmt.Errorf("unable to open dockerfile=%q: %w", appConfig.Anchore.Dockerfile, err)
+			return fmt.Errorf("unable to open dockerfile=%q: %w", cfg.Anchore.Dockerfile, err)
 		}
 
 		dockerfileContents, err = ioutil.ReadAll(fh)
 		if err != nil {
-			return fmt.Errorf("unable to read dockerfile=%q: %w", appConfig.Anchore.Dockerfile, err)
+			return fmt.Errorf("unable to read dockerfile=%q: %w", cfg.Anchore.Dockerfile, err)
 		}
 	}
 
 	c, err := anchore.NewClient(anchore.Configuration{
-		BaseURL:  appConfig.Anchore.Host,
-		Username: appConfig.Anchore.Username,
-		Password: appConfig.Anchore.Password,
+		BaseURL:  cfg.Anchore.Host,
+		Username: cfg.Anchore.Username,
+		Password: cfg.Anchore.Password,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create anchore client: %w", err)
@@ -377,12 +387,12 @@ func runPackageSbomUpload(src *source.Source, s sbom.SBOM) error {
 		ImageMetadata:           src.Image.Metadata,
 		SBOM:                    s,
 		Dockerfile:              dockerfileContents,
-		OverwriteExistingUpload: appConfig.Anchore.OverwriteExistingImage,
-		Timeout:                 appConfig.Anchore.ImportTimeout,
+		OverwriteExistingUpload: cfg.Anchore.OverwriteExistingImage,
+		Timeout:                 cfg.Anchore.ImportTimeout,
 	}
 
 	if err := c.Import(context.Background(), importCfg); err != nil {
-		return fmt.Errorf("failed to upload results to host=%s: %+v", appConfig.Anchore.Host, err)
+		return fmt.Errorf("failed to upload results to host=%s: %+v", cfg.Anchore.Host, err)
 	}
 
 	return nil

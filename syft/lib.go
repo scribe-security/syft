@@ -20,16 +20,31 @@ import (
 	"fmt"
 
 	"github.com/anchore/syft/syft/artifact"
+	"github.com/anchore/syft/syft/pkg"
 
 	"github.com/anchore/syft/internal/bus"
+	"github.com/anchore/syft/internal/config"
 	"github.com/anchore/syft/internal/log"
+
 	"github.com/anchore/syft/syft/linux"
 	"github.com/anchore/syft/syft/logger"
-	"github.com/anchore/syft/syft/pkg"
 	"github.com/anchore/syft/syft/pkg/cataloger"
 	"github.com/anchore/syft/syft/source"
 	"github.com/wagoodman/go-partybus"
 )
+
+type Application = config.Application
+type Anchore = config.Anchore
+type CliOnlyOptions = config.CliOnlyOptions
+type Pkg = config.Pkg
+type FileMetadata = config.FileMetadata
+type FileClassification = config.FileClassification
+type FileContents = config.FileContents
+type Secrets = config.Secrets
+type Registry = config.Registry
+type Attest = config.Attest
+type CatalogerOptions = config.CatalogerOptions
+type RegistryCredentials = config.RegistryCredentials
 
 // CatalogPackages takes an inventory of packages from the given image from a particular perspective
 // (e.g. squashed source, all-layers source). Returns the discovered  set of packages, the identified Linux

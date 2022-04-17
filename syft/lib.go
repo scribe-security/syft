@@ -24,6 +24,7 @@ import (
 
 	"github.com/anchore/syft/internal/bus"
 	"github.com/anchore/syft/internal/config"
+	"github.com/anchore/syft/internal/formats/syftjson/model"
 	"github.com/anchore/syft/internal/log"
 
 	"github.com/anchore/syft/syft/linux"
@@ -45,6 +46,13 @@ type Registry = config.Registry
 type Attest = config.Attest
 type CatalogerOptions = config.CatalogerOptions
 type RegistryCredentials = config.RegistryCredentials
+type Document = model.Document
+type Artifacts = model.Package
+type Relationship = model.Relationship
+type File = model.File
+type ArtifacSourcets = model.Source
+type Descriptor = model.Descriptor
+type Schema = model.Schema
 
 // CatalogPackages takes an inventory of packages from the given image from a particular perspective
 // (e.g. squashed source, all-layers source). Returns the discovered  set of packages, the identified Linux

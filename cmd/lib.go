@@ -16,7 +16,7 @@ import (
 	"github.com/wagoodman/go-partybus"
 )
 
-func LibInitBase(cfg *config.Application, l logger.Logger, enable_ui bool) ([]ui.UI, error) {
+func libInitBase(cfg *config.Application, l logger.Logger, enable_ui bool) ([]ui.UI, error) {
 	if err := cfg.LibParseConfigValues(); err != nil {
 		return nil, fmt.Errorf("invalid application config: %w", err)
 	}
@@ -47,13 +47,19 @@ func libInitEventBus() {
 	}
 }
 
+// LibPackagesExec run packages command as a library
+// userInput: target
+// cfg: syft configuration structure
+// l: logger to attach to, nil  for default syft logger
+// enable_ui: enable disable ui output
+// Function return sbom or errors.
 func LibPackagesExec(userInput string, cfg *config.Application, l logger.Logger, enable_ui bool) (*sbom.SBOM, error) {
 	writer, err := makeWriter(cfg.Outputs, cfg.File)
 	if err != nil {
 		return nil, err
 	}
 
-	uis, err := LibInitBase(cfg, l, enable_ui)
+	uis, err := libInitBase(cfg, l, enable_ui)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +78,7 @@ func LibPackagesExec(userInput string, cfg *config.Application, l logger.Logger,
 
 	libInitEventBus()
 	outSbom, errs := packagesExecWorker(*si, cfg, writer)
-	return SbomEventLoop(
+	return sbomEventLoop(
 		outSbom, errs,
 		setupSignals(),
 		eventSubscription,
@@ -81,7 +87,7 @@ func LibPackagesExec(userInput string, cfg *config.Application, l logger.Logger,
 	)
 }
 
-func SbomEventLoop(outSbom <-chan *sbom.SBOM, workerErrs <-chan error, signals <-chan os.Signal, subscription *partybus.Subscription, cleanupFn func(), uxs ...ui.UI) (*sbom.SBOM, error) {
+func sbomEventLoop(outSbom <-chan *sbom.SBOM, workerErrs <-chan error, signals <-chan os.Signal, subscription *partybus.Subscription, cleanupFn func(), uxs ...ui.UI) (*sbom.SBOM, error) {
 	err := eventLoop(workerErrs,
 		signals,
 		subscription,

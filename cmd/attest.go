@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/anchore/syft/internal/config"
 	"github.com/anchore/syft/internal/formats/cyclonedxjson"
 	"github.com/anchore/syft/internal/formats/spdx22json"
 	"github.com/anchore/syft/internal/formats/syftjson"
@@ -84,7 +85,7 @@ var (
 				defer profile.Start(profile.MemProfile).Stop()
 			}
 
-			return attestExec(cmd.Context(), cmd, args)
+			return attestExec(cmd.Context(), cmd, args, appConfig)
 		},
 	}
 )
@@ -128,7 +129,7 @@ func selectPassFunc(keypath string) (cosign.PassFunc, error) {
 	return fn, nil
 }
 
-func attestExec(ctx context.Context, _ *cobra.Command, args []string) error {
+func attestExec(ctx context.Context, _ *cobra.Command, args []string, cfg *config.Application) error {
 	// can only be an image for attestation or OCI DIR
 	userInput := args[0]
 	si, err := source.ParseInput(userInput, appConfig.Platform, false)
@@ -180,15 +181,15 @@ func attestExec(ctx context.Context, _ *cobra.Command, args []string) error {
 	defer sv.Close()
 
 	return eventLoop(
-		attestationExecWorker(*si, format, predicateType, sv),
+		attestationExecWorker(*si, cfg, format, predicateType, sv),
 		setupSignals(),
 		eventSubscription,
 		stereoscope.Cleanup,
-		ui.Select(isVerbose(), appConfig.Quiet)...,
+		ui.Select(isVerbose(appConfig), appConfig.Quiet)...,
 	)
 }
 
-func attestationExecWorker(sourceInput source.Input, format sbom.Format, predicateType string, sv *sign.SignerVerifier) <-chan error {
+func attestationExecWorker(sourceInput source.Input, cfg *config.Application, format sbom.Format, predicateType string, sv *sign.SignerVerifier) <-chan error {
 	errs := make(chan error)
 	go func() {
 		defer close(errs)
@@ -202,7 +203,7 @@ func attestationExecWorker(sourceInput source.Input, format sbom.Format, predica
 			return
 		}
 
-		s, err := generateSBOM(src, errs)
+		s, err := generateSBOM(src, cfg, errs)
 		if err != nil {
 			errs <- err
 			return

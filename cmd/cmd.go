@@ -14,6 +14,7 @@ import (
 	"github.com/anchore/syft/internal/logger"
 	"github.com/anchore/syft/internal/version"
 	"github.com/anchore/syft/syft"
+
 	"github.com/gookit/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -113,12 +114,16 @@ func initAppConfig() {
 }
 
 func initLogging() {
+	initLoggingConfig(appConfig)
+}
+
+func initLoggingConfig(appCfg *config.Application) {
 	cfg := logger.LogrusConfig{
-		EnableConsole: (appConfig.Log.FileLocation == "" || appConfig.CliOptions.Verbosity > 0) && !appConfig.Quiet,
-		EnableFile:    appConfig.Log.FileLocation != "",
-		Level:         appConfig.Log.LevelOpt,
-		Structured:    appConfig.Log.Structured,
-		FileLocation:  appConfig.Log.FileLocation,
+		EnableConsole: (appCfg.Log.FileLocation == "" || appCfg.CliOptions.Verbosity > 0) && !appCfg.Quiet,
+		EnableFile:    appCfg.Log.FileLocation != "",
+		Level:         appCfg.Log.LevelOpt,
+		Structured:    appCfg.Log.Structured,
+		FileLocation:  appCfg.Log.FileLocation,
 	}
 
 	logWrapper := logger.NewLogrusLogger(cfg)

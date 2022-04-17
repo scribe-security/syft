@@ -49,6 +49,19 @@ type Application struct {
 	Platform           string             `yaml:"platform" json:"platform" mapstructure:"platform"`
 }
 
+type Anchore = anchore
+type Pkg = pkg
+type FileClassification = fileClassification
+type FileContents = fileContents
+type Secrets = secrets
+type Registry = registry
+type Attest = attest
+type CatalogerOptions = catalogerOptions
+
+func (cfg *Application) LibParseConfigValues() error {
+	return cfg.parseConfigValues()
+}
+
 // PowerUserCatalogerEnabledDefault switches all catalogers to be enabled when running power-user command
 func PowerUserCatalogerEnabledDefault() {
 	catalogerEnabledDefault = true

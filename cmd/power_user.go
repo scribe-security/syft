@@ -7,6 +7,7 @@ import (
 	"github.com/anchore/stereoscope"
 	"github.com/anchore/syft/internal"
 	"github.com/anchore/syft/internal/bus"
+	"github.com/anchore/syft/internal/config"
 	"github.com/anchore/syft/internal/formats/syftjson"
 	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/internal/ui"
@@ -94,14 +95,14 @@ func powerUserExec(_ *cobra.Command, args []string) error {
 	}()
 
 	return eventLoop(
-		powerUserExecWorker(userInput, writer),
+		powerUserExecWorker(userInput, appConfig, writer),
 		setupSignals(),
 		eventSubscription,
 		stereoscope.Cleanup,
-		ui.Select(isVerbose(), appConfig.Quiet)...,
+		ui.Select(isVerbose(appConfig), appConfig.Quiet)...,
 	)
 }
-func powerUserExecWorker(userInput string, writer sbom.Writer) <-chan error {
+func powerUserExecWorker(userInput string, cfg *config.Application, writer sbom.Writer) <-chan error {
 	errs := make(chan error)
 	go func() {
 		defer close(errs)
@@ -110,7 +111,7 @@ func powerUserExecWorker(userInput string, writer sbom.Writer) <-chan error {
 		appConfig.FileMetadata.Cataloger.Enabled = true
 		appConfig.FileContents.Cataloger.Enabled = true
 		appConfig.FileClassification.Cataloger.Enabled = true
-		tasks, err := tasks()
+		tasks, err := tasks(cfg)
 		if err != nil {
 			errs <- err
 			return

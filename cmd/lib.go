@@ -94,7 +94,6 @@ func SbomEventLoop(outSbom <-chan *sbom.SBOM, workerErrs <-chan error, signals <
 	if err == nil {
 		out = <-outSbom
 	}
-	// out := <-outSbom
 
 	return out, err
 

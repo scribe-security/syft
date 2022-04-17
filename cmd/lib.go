@@ -25,10 +25,8 @@ func libInitBase(cfg *config.Application, l logger.Logger, enable_ui bool) ([]ui
 	uis = append(uis, ui.NewlibUI())
 	if l == nil {
 		initLoggingConfig(cfg)
-		uis = ui.Select(isVerbose(cfg), cfg.Quiet)
 	} else {
 		libInitLoggingConfig(l)
-		uis = append(uis, ui.NewLoggerUI())
 	}
 
 	if enable_ui {

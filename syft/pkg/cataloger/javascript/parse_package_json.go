@@ -23,11 +23,12 @@ var _ common.ParserFn = parsePackageJSON
 
 // packageJSON represents a JavaScript package.json file
 type packageJSON struct {
-	Version      string            `json:"version"`
-	Latest       []string          `json:"latest"`
-	Author       author            `json:"author"`
-	License      json.RawMessage   `json:"license"`
-	Licenses     []license         `json:"licenses"`
+	Version  string          `json:"version"`
+	Latest   []string        `json:"latest"`
+	Author   author          `json:"author"`
+	License  json.RawMessage `json:"license"`
+	Licenses json.RawMessage `json:"license"`
+	// Licenses     []license         `json:"licenses"`
 	Name         string            `json:"name"`
 	Homepage     string            `json:"homepage"`
 	Description  string            `json:"description"`
@@ -56,6 +57,7 @@ func (a *author) UnmarshalJSON(b []byte) error {
 	var auth author
 
 	if err := json.Unmarshal(b, &authorStr); err != nil {
+
 		// string parsing did not work, assume a map was given
 		// for more information: https://docs.npmjs.com/files/package.json#people-fields-author-contributors
 		if err := json.Unmarshal(b, &fields); err != nil {
@@ -93,11 +95,13 @@ func (r *repository) UnmarshalJSON(b []byte) error {
 	var repo repository
 
 	if err := json.Unmarshal(b, &repositoryStr); err != nil {
+
 		// string parsing did not work, assume a map was given
 		// for more information: https://docs.npmjs.com/files/package.json#people-fields-author-contributors
 		if err := json.Unmarshal(b, &fields); err != nil {
 			return fmt.Errorf("unable to parse package.json author: %w", err)
 		}
+
 		// translate the map into a structure
 		if err := mapstructure.Decode(fields, &repo); err != nil {
 			return fmt.Errorf("unable to decode package.json author: %w", err)
@@ -134,7 +138,20 @@ func licenseFromJSON(b []byte) (string, error) {
 	return "", errors.New("unable to unmarshal license field as either string or object")
 }
 
+func licensesFromJSON(b []byte) ([]license, error) {
+
+	// then try as object (this format is deprecated)
+	var licenseObject []license
+	err := json.Unmarshal(b, &licenseObject)
+	if err == nil {
+		return licenseObject, nil
+	}
+
+	return nil, errors.New("unable to unmarshal licenses field")
+}
+
 func (p packageJSON) licensesFromJSON() ([]string, error) {
+
 	if p.License == nil && p.Licenses == nil {
 		// This package.json doesn't specify any licenses whatsoever
 		return []string{}, nil
@@ -145,8 +162,13 @@ func (p packageJSON) licensesFromJSON() ([]string, error) {
 		return []string{singleLicense}, nil
 	}
 
+	multiLicense, err := licensesFromJSON(p.Licenses)
+	if err == nil {
+		return []string{singleLicense}, nil
+	}
+
 	// The "licenses" field is deprecated. It should be inspected as a last resort.
-	if p.Licenses != nil {
+	if multiLicense != nil {
 		mapLicenses := func(licenses []license) []string {
 			mappedLicenses := make([]string, len(licenses))
 			for i, l := range licenses {
@@ -155,7 +177,7 @@ func (p packageJSON) licensesFromJSON() ([]string, error) {
 			return mappedLicenses
 		}
 
-		return mapLicenses(p.Licenses), nil
+		return mapLicenses(multiLicense), nil
 	}
 
 	return nil, fmt.Errorf("unable to parse license field: %w", err)
@@ -165,7 +187,7 @@ func (p packageJSON) licensesFromJSON() ([]string, error) {
 func parsePackageJSON(path string, reader io.Reader) ([]*pkg.Package, []artifact.Relationship, error) {
 	var packages []*pkg.Package
 	dec := json.NewDecoder(reader)
-
+	fmt.Println("##########3", path)
 	for {
 		var p packageJSON
 		if err := dec.Decode(&p); err == io.EOF {

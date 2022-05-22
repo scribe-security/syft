@@ -26,7 +26,7 @@ func libInitBase(cfg *config.Application, l logger.Logger, enable_ui bool) ([]ui
 	if l == nil {
 		initLoggingConfig(cfg)
 	} else {
-		libInitLoggingConfig(l)
+		LibInitLoggingConfig(l)
 	}
 
 	if enable_ui {
@@ -36,7 +36,7 @@ func libInitBase(cfg *config.Application, l logger.Logger, enable_ui bool) ([]ui
 	return uis, nil
 }
 
-func libInitLoggingConfig(logWrapper syftLogger.Logger) {
+func LibInitLoggingConfig(logWrapper syftLogger.Logger) {
 	syft.SetLogger(logWrapper)
 	stereoscope.SetLogger(logWrapper)
 }

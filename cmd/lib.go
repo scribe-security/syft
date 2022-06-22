@@ -16,17 +16,20 @@ import (
 	"github.com/wagoodman/go-partybus"
 )
 
-func libInitBase(cfg *config.Application, l logger.Logger, enable_ui bool) ([]ui.UI, error) {
+func libInitBase(cfg *config.Application, l logger.Logger, enable_log, enable_ui bool) ([]ui.UI, error) {
 	if err := cfg.LibParseConfigValues(); err != nil {
 		return nil, fmt.Errorf("invalid application config: %w", err)
 	}
 
 	var uis []ui.UI
 	uis = append(uis, ui.NewlibUI())
-	if l == nil {
-		initLoggingConfig(cfg)
-	} else {
-		LibInitLoggingConfig(l)
+
+	if enable_log {
+		if l == nil {
+			initLoggingConfig(cfg)
+		} else {
+			LibInitLoggingConfig(l)
+		}
 	}
 
 	if enable_ui {
@@ -53,13 +56,13 @@ func libInitEventBus() {
 // l: logger to attach to, nil  for default syft logger
 // enable_ui: enable disable ui output
 // Function return sbom or errors.
-func LibPackagesExec(userInput string, cfg *config.Application, l logger.Logger, enable_ui bool) (*sbom.SBOM, error) {
+func LibPackagesExec(userInput string, cfg *config.Application, l logger.Logger, enable_log, enable_ui bool) (*sbom.SBOM, error) {
 	writer, err := makeWriter(cfg.Outputs, cfg.File)
 	if err != nil {
 		return nil, err
 	}
 
-	uis, err := libInitBase(cfg, l, enable_ui)
+	uis, err := libInitBase(cfg, l, enable_log, enable_ui)
 	if err != nil {
 		return nil, err
 	}

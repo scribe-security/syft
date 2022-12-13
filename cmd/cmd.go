@@ -72,16 +72,6 @@ func initCmdAliasBindings() {
 		if err = bindPackagesConfigOptions(activeCmd.Flags()); err != nil {
 			panic(err)
 		}
-	case attestCmd:
-		// the --output and --platform options are independently defined flags, but a shared config option
-		if err = bindSharedConfigOption(attestCmd.Flags()); err != nil {
-			panic(err)
-		}
-		// even though the root command or packages command is NOT being run, we still need default bindings
-		// such that application config parsing passes.
-		if err = bindExclusivePackagesConfigOptions(packagesCmd.Flags()); err != nil {
-			panic(err)
-		}
 	default:
 		// even though the root command or packages command is NOT being run, we still need default bindings
 		// such that application config parsing passes.

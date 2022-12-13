@@ -48,6 +48,7 @@ func CatalogPackages(src *source.Source, cfg cataloger.Config) (*pkg.Catalog, []
 		log.Info("could not identify distro")
 	}
 
+<<<<<<< HEAD
 	// if the catalogers have been configured, use them regardless of input type
 	var catalogers []pkg.Cataloger
 	if len(cfg.Catalogers) > 0 {
@@ -64,12 +65,29 @@ func CatalogPackages(src *source.Source, cfg cataloger.Config) (*pkg.Catalog, []
 		case source.DirectoryScheme:
 			log.Info("cataloging directory")
 			catalogers = cataloger.DirectoryCatalogers(cfg)
+=======
+	// conditionally use the correct set of catalogers based on the scheme (container image or directory)
+	if cfg.CatalogerGroup == "" {
+		switch src.Metadata.Scheme {
+		case source.ImageScheme:
+			cfg.CatalogerGroup = cataloger.InstallationGroup
+		case source.FileScheme:
+			cfg.CatalogerGroup = cataloger.AllGroup
+		case source.DirectoryScheme:
+			cfg.CatalogerGroup = cataloger.IndexGroup
+>>>>>>> 46c24eb3 (cataloger select one,group)
 		default:
 			return nil, nil, nil, fmt.Errorf("unable to determine cataloger set from scheme=%+v", src.Metadata.Scheme)
 		}
 	}
 
-	catalog, relationships, err := cataloger.Catalog(resolver, release, catalogers...)
+	groupCatalogers, err := cataloger.SelectGroup(cfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	enabledCatalogers := cataloger.FilterCatalogers(cfg, groupCatalogers)
+
+	catalog, relationships, err := cataloger.Catalog(resolver, release, enabledCatalogers...)
 	if err != nil {
 		return nil, nil, nil, err
 	}

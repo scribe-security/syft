@@ -187,14 +187,14 @@ func contains(enabledPartial []string, catalogerName string) bool {
 	return false
 }
 
-func SelectGroup(cfg Config) ([]Cataloger, error) {
+func SelectGroup(cfg Config) ([]pkg.Cataloger, error) {
 	switch cfg.CatalogerGroup {
 	case IndexGroup:
 		log.Info("cataloging index group")
-		return IndexCatalogers(cfg), nil
+		return DirectoryCatalogers(cfg), nil
 	case InstallationGroup:
 		log.Info("cataloging installation group")
-		return InstallationCatalogers(cfg), nil
+		return ImageCatalogers(cfg), nil
 	case AllGroup:
 		log.Info("cataloging all group")
 		return AllCatalogers(cfg), nil
@@ -205,28 +205,4 @@ func SelectGroup(cfg Config) ([]Cataloger, error) {
 
 func FilterCatalogers(cfg Config, groupCatalogers []Cataloger) []Cataloger {
 	return filterCatalogers(groupCatalogers, cfg.Catalogers)
-}
-
-func filterCatalogers(catalogers []Cataloger, enabledCatalogers []string) []Cataloger {
-	// if enable-cataloger is not set, all applicable catalogers are enabled by default
-	if len(enabledCatalogers) == 0 {
-		return catalogers
-	}
-	var filteredCatalogers []Cataloger
-	for _, cataloger := range catalogers {
-		if contains(enabledCatalogers, cataloger.Name()) {
-			filteredCatalogers = append(filteredCatalogers, cataloger)
-		}
-	}
-	return filteredCatalogers
-}
-
-func contains(catalogers []string, str string) bool {
-	for _, cataloger := range catalogers {
-		if cataloger == str ||
-			fmt.Sprintf("%s-cataloger", cataloger) == str {
-			return true
-		}
-	}
-	return false
 }

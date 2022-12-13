@@ -69,7 +69,6 @@ func (cfg Application) ToCatalogerConfig() cataloger.Config {
 	}
 }
 
-type Anchore = anchore
 type Pkg = pkg
 type FileClassification = fileClassification
 type FileContents = fileContents

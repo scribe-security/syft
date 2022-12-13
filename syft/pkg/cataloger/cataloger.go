@@ -203,6 +203,6 @@ func SelectGroup(cfg Config) ([]pkg.Cataloger, error) {
 	}
 }
 
-func FilterCatalogers(cfg Config, groupCatalogers []Cataloger) []Cataloger {
+func FilterCatalogers(cfg Config, groupCatalogers []pkg.Cataloger) []Cataloger {
 	return filterCatalogers(groupCatalogers, cfg.Catalogers)
 }

@@ -69,6 +69,19 @@ func (cfg Application) ToCatalogerConfig() cataloger.Config {
 	}
 }
 
+type Anchore = anchore
+type Pkg = pkg
+type FileClassification = fileClassification
+type FileContents = fileContents
+type Secrets = secrets
+type Registry = registry
+type Attest = attest
+type CatalogerOptions = catalogerOptions
+
+func (cfg *Application) LibParseConfigValues() error {
+	return cfg.parseConfigValues()
+}
+
 func (cfg *Application) LoadAllValues(v *viper.Viper, configPath string) error {
 	// priority order: viper.Set, flag, env, config, kv, defaults
 	// flags have already been loaded into viper by command construction

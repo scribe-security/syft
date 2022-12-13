@@ -6,9 +6,11 @@ catalogers defined in child packages as well as the interface definition to impl
 package cataloger
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/anchore/syft/internal/log"
+	"github.com/anchore/syft/syft/artifact"
 	"github.com/anchore/syft/syft/pkg"
 	"github.com/anchore/syft/syft/pkg/cataloger/alpm"
 	"github.com/anchore/syft/syft/pkg/cataloger/apkdb"
@@ -29,16 +31,11 @@ import (
 	"github.com/anchore/syft/syft/pkg/cataloger/rust"
 	"github.com/anchore/syft/syft/pkg/cataloger/sbom"
 	"github.com/anchore/syft/syft/pkg/cataloger/swift"
+	"github.com/anchore/syft/syft/source"
 )
 
-<<<<<<< HEAD
 const AllCatalogersPattern = "all"
 
-// ImageCatalogers returns a slice of locally implemented catalogers that are fit for detecting installations of packages.
-func ImageCatalogers(cfg Config) []pkg.Cataloger {
-	return filterCatalogers([]pkg.Cataloger{
-		alpm.NewAlpmdbCataloger(),
-=======
 type Group string
 
 const (
@@ -64,9 +61,10 @@ type Cataloger interface {
 }
 
 // InstallationCatalogers returns a slice of locally implemented catalogers that are fit for detecting installations of packages.
-func InstallationCatalogers(cfg Config) []Cataloger {
-	return []Cataloger{
->>>>>>> 46c24eb3 (cataloger select one,group)
+// ImageCatalogers returns a slice of locally implemented catalogers that are fit for detecting installations of packages.
+func ImageCatalogers(cfg Config) []pkg.Cataloger {
+	return filterCatalogers([]pkg.Cataloger{
+		alpm.NewAlpmdbCataloger(),
 		ruby.NewGemSpecCataloger(),
 		python.NewPythonPackageCataloger(),
 		php.NewPHPComposerInstalledCataloger(),

@@ -64,7 +64,7 @@ func parsePackageJSON(_ source.FileResolver, _ *generic.Environment, reader sour
 		}
 
 		if !p.hasNameAndVersionValues() {
-			log.Debugf("encountered package.json file without a name and/or version field, ignoring (path=%q)", reader.AccessPath())
+			log.Tracef("encountered package.json file without a name and/or version field, ignoring (path=%q)", reader.AccessPath())
 			return nil, nil, nil
 		}
 

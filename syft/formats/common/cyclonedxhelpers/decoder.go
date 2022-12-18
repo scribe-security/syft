@@ -17,10 +17,18 @@ import (
 
 func GetValidator(format cyclonedx.BOMFileFormat) sbom.Validator {
 	return func(reader io.Reader) error {
-		bom := &cyclonedx.BOM{}
+		bom := &cyclonedx.BOM{
+			Components: &[]cyclonedx.Component{},
+		}
 		err := cyclonedx.NewBOMDecoder(reader, format).Decode(bom)
 		if err != nil {
 			return err
+		}
+
+		if bom.Components != nil {
+			components := *bom.Components
+			components = append(components, *bom.Metadata.Component)
+			bom.Components = &components
 		}
 		// random JSON does not necessarily cause an error (e.g. SPDX)
 		if (cyclonedx.BOM{} == *bom || bom.Components == nil) {
@@ -35,10 +43,17 @@ func GetDecoder(format cyclonedx.BOMFileFormat) sbom.Decoder {
 		bom := &cyclonedx.BOM{
 			Components: &[]cyclonedx.Component{},
 		}
+
 		err := cyclonedx.NewBOMDecoder(reader, format).Decode(bom)
 		if err != nil {
 			return nil, err
 		}
+		if bom.Components != nil {
+			components := *bom.Components
+			components = append(components, *bom.Metadata.Component)
+			bom.Components = &components
+		}
+
 		s, err := ToSyftModel(bom)
 		if err != nil {
 			return nil, err

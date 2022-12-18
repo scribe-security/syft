@@ -33,7 +33,7 @@ func parserPomXML(_ source.FileResolver, _ *generic.Environment, reader source.L
 	for _, dep := range pom.Dependencies {
 		p, err := newPackageFromPom(pom, dep, reader.Location)
 		if err != nil {
-			log.Debugf("Skipping package, Err: %s", err)
+			log.Debugf("Skipping package, Dep: %s, Err: %s", dep, err)
 			continue
 		}
 		if p.Name == "" {

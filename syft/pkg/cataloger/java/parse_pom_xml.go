@@ -36,7 +36,7 @@ func parserPomXML(_ source.FileResolver, _ *generic.Environment, reader source.L
 			reader.Location.WithAnnotation(pkg.EvidenceAnnotationKey, pkg.PrimaryEvidenceAnnotation),
 		)
 		if err != nil {
-			log.Debugf("Skipping package, Err: %s", err)
+			log.Debugf("Skipping package, Dep: %s, Err: %s", dep, err)
 			continue
 		}
 		if p.Name == "" {

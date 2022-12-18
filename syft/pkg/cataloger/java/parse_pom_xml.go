@@ -11,6 +11,7 @@ import (
 	"github.com/vifraa/gopom"
 	"golang.org/x/net/html/charset"
 
+	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/syft/artifact"
 	"github.com/anchore/syft/syft/pkg"
 	"github.com/anchore/syft/syft/pkg/cataloger/generic"
@@ -30,7 +31,11 @@ func parserPomXML(_ source.FileResolver, _ *generic.Environment, reader source.L
 
 	var pkgs []pkg.Package
 	for _, dep := range pom.Dependencies {
-		p := newPackageFromPom(pom, dep, reader.Location)
+		p, err := newPackageFromPom(pom, dep, reader.Location)
+		if err != nil {
+			log.Debugf("Skipping package, Err: %s", err)
+			continue
+		}
 		if p.Name == "" {
 			continue
 		}
@@ -62,15 +67,19 @@ func newPomProject(path string, p gopom.Project) *pkg.PomProject {
 	}
 }
 
-func newPackageFromPom(pom gopom.Project, dep gopom.Dependency, locations ...source.Location) pkg.Package {
+func newPackageFromPom(pom gopom.Project, dep gopom.Dependency, locations ...source.Location) (pkg.Package, error) {
 	m := pkg.JavaMetadata{
 		PomProperties: &pkg.PomProperties{
 			GroupID: resolveProperty(pom, dep.GroupID),
+			Scope:   dep.Scope,
 		},
 	}
 
 	name := dep.ArtifactID
-	version := resolveProperty(pom, dep.Version)
+	version, err := resolvePropertyFail(pom, dep.Version)
+	if err != nil {
+		return pkg.Package{}, err
+	}
 
 	p := pkg.Package{
 		Name:         name,
@@ -85,7 +94,7 @@ func newPackageFromPom(pom gopom.Project, dep gopom.Dependency, locations ...sou
 
 	p.SetID()
 
-	return p
+	return p, nil
 }
 
 func decodePomXML(content io.Reader) (project gopom.Project, err error) {
@@ -122,6 +131,15 @@ func cleanDescription(original string) (cleaned string) {
 	return strings.TrimSpace(cleaned)
 }
 
+func resolvePropertyFail(pom gopom.Project, property string) (string, error) {
+	newProperty := resolveProperty(pom, property)
+	if strings.HasPrefix(newProperty, "${") {
+		return "", fmt.Errorf("unresolved, Property: %s", newProperty)
+	}
+
+	return newProperty, nil
+}
+
 // resolveProperty emulates some maven property resolution logic by looking in the project's variables
 // as well as supporting the project expressions like ${project.parent.groupId}.
 // If no match is found, the entire expression including ${} is returned
@@ -135,10 +153,15 @@ func resolveProperty(pom gopom.Project, property string) string {
 		// see if we have a project.x expression and process this based
 		// on the xml tags in gopom
 		parts := strings.Split(propertyName, ".")
+		if len(parts) > 1 && strings.TrimSpace(parts[0]) == "parent" {
+			parts = append([]string{"project"}, parts...)
+		}
+
 		numParts := len(parts)
 		if numParts > 1 && strings.TrimSpace(parts[0]) == "project" {
 			pomValue := reflect.ValueOf(pom)
 			pomValueType := pomValue.Type()
+
 			for partNum := 1; partNum < numParts; partNum++ {
 				if pomValueType.Kind() != reflect.Struct {
 					break

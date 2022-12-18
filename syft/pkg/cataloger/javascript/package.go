@@ -161,8 +161,10 @@ func addLicenses(name string, resolver source.FileResolver, location source.Loca
 		contents, err := io.ReadAll(contentReader)
 		if err != nil {
 			log.Debugf("error reading file contents for %s: %v", pkgFile, err)
+			contentReader.Close()
 			return allLicenses
 		}
+		contentReader.Close()
 
 		var pkgJSON packageJSON
 		err = json.Unmarshal(contents, &pkgJSON)

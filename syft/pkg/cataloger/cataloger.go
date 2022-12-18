@@ -245,7 +245,6 @@ func hasFullWord(targetPhrase, candidate string) bool {
 }
 
 func SelectGroup(cfg Config) ([]pkg.Cataloger, error) {
-	cfg.CatalogerGroup = AllGroup
 	switch cfg.CatalogerGroup {
 	case IndexGroup:
 		log.Info("cataloging index group")

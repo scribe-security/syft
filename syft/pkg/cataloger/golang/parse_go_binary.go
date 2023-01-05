@@ -85,12 +85,12 @@ func makeGoMainPackage(mod *debug.BuildInfo, arch string, location source.Locati
 // 2) reading file headers from binaries compiled by < go1.18
 func getArchs(readers []io.ReaderAt, builds []*debug.BuildInfo) []string {
 	if len(readers) != len(builds) {
-		log.Debugf("golang cataloger: bin parsing: number of builds and readers doesn't match")
+		// log.Debugf("golang cataloger: bin parsing: number of builds and readers doesn't match")
 		return nil
 	}
 
 	if len(readers) == 0 || len(builds) == 0 {
-		log.Debugf("golang cataloger: bin parsing: %d readers and %d build info items", len(readers), len(builds))
+		// log.Debugf("golang cataloger: bin parsing: %d readers and %d build info items", len(readers), len(builds))
 		return nil
 	}
 

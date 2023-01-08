@@ -99,6 +99,7 @@ func newJavaArchiveParser(reader source.LocationReadCloser, detectNested bool) (
 
 // parse the loaded archive and return all packages found.
 func (j *archiveParser) parse() ([]pkg.Package, []artifact.Relationship, error) {
+
 	var pkgs []pkg.Package
 	var relationships []artifact.Relationship
 
@@ -183,6 +184,24 @@ func (j *archiveParser) discoverMainPackage() (*pkg.Package, error) {
 	digests, err := syftFile.DigestsFromFile(archiveCloser, javaArchiveHashes)
 	if err != nil {
 		log.Warnf("failed to create digest for file=%q: %+v", j.archivePath, err)
+	}
+
+	// Hack for inconsistent version from jar file path
+	if strings.Contains(j.fileInfo.version, "-") {
+		var newVersion string
+		if specVersion, ok := manifest.Main["Specification-Version"]; ok {
+			newVersion = specVersion
+		}
+		if specVersion, ok := manifest.Main["Implementation-Version"]; ok {
+			newVersion = specVersion
+		}
+		if newVersion != "" {
+			if newVersion != j.fileInfo.version &&
+				strings.HasPrefix(j.fileInfo.version, fmt.Sprintf("%s-", newVersion)) {
+				log.Debugf("Normalizing version,Package: %s, Old version: %s, New version: %s", j.fileInfo.name, j.fileInfo.version, newVersion)
+				j.fileInfo.version = newVersion
+			}
+		}
 	}
 
 	return &pkg.Package{

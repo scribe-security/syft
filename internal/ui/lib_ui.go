@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+
 	syftEvent "github.com/anchore/syft/syft/event"
 	"github.com/wagoodman/go-partybus"
 )
@@ -30,5 +32,8 @@ func (h *libUI) Handle(event partybus.Event) error {
 }
 
 func (h *libUI) Teardown(force bool) error {
+	if force {
+		return fmt.Errorf("teardown")
+	}
 	return nil
 }

@@ -60,7 +60,7 @@ func EventLoop(workerErrs <-chan error, signals <-chan os.Signal, subscription *
 					// TODO: should we unsubscribe? should we try to halt execution? or continue?
 				}
 			}
-		case <-signals:
+		case e, _ := <-signals:
 			// ignore further results from any event source and exit ASAP, but ensure that all cache is cleaned up.
 			// we ignore further errors since cleaning up the tmp directories will affect running catalogers that are
 			// reading/writing from/to their nested temp dirs. This is acceptable since we are bailing without result.
@@ -71,6 +71,7 @@ func EventLoop(workerErrs <-chan error, signals <-chan os.Signal, subscription *
 			events = nil
 			workerErrs = nil
 			forceTeardown = true
+			retErr = multierror.Append(retErr, fmt.Errorf("%s", e))
 		}
 	}
 

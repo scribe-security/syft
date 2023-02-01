@@ -207,6 +207,10 @@ func groupIDsFromPomProperties(properties *pkg.PomProperties) (groupIDs []string
 		groupIDs = append(groupIDs, cleanGroupID(properties.ArtifactID))
 	}
 
+	if properties.GroupID != "" {
+		groupIDs = append(groupIDs, cleanGroupID(properties.GroupID))
+	}
+
 	return groupIDs
 }
 

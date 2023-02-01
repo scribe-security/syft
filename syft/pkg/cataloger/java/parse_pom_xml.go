@@ -24,23 +24,25 @@ const pomXMLDirGlob = "**/pom.xml"
 var propertyMatcher = regexp.MustCompile("[$][{][^}]+[}]")
 
 func parserPomXML(_ source.FileResolver, _ *generic.Environment, reader source.LocationReadCloser) ([]pkg.Package, []artifact.Relationship, error) {
-	pom, err := decodePomXML(reader)
+	poms, err := decodePomXMLOption(reader)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	var pkgs []pkg.Package
-	for _, dep := range pom.Dependencies {
-		p, err := newPackageFromPom(pom, dep, reader.Location)
-		if err != nil {
-			log.Debugf("Skipping package, Dep: %s, Err: %s", dep, err)
-			continue
-		}
-		if p.Name == "" {
-			continue
-		}
+	for _, pom := range poms {
+		for _, dep := range pom.Dependencies {
+			p, err := newPackageFromPom(pom, dep, reader.Location)
+			if err != nil {
+				log.Debugf("Skipping package, Dep: %s, Err: %s", dep, err)
+				continue
+			}
+			if p.Name == "" {
+				continue
+			}
 
-		pkgs = append(pkgs, p)
+			pkgs = append(pkgs, p)
+		}
 	}
 
 	return pkgs, nil, nil
@@ -97,6 +99,23 @@ func newPackageFromPom(pom gopom.Project, dep gopom.Dependency, locations ...sou
 	return p, nil
 }
 
+func decodePomXMLOption(content io.Reader) ([]gopom.Project, error) {
+	var projects []gopom.Project
+
+	project, errSingle := decodePomXML(content)
+	if errSingle == nil {
+		projects = append(projects, project)
+		return projects, nil
+	}
+
+	projects, errGroup := decodePomXMLGroup(content)
+	if errGroup == nil {
+		return projects, nil
+	}
+
+	return nil, fmt.Errorf("error decoding POM XML: %w, %w", errSingle, errGroup)
+}
+
 func decodePomXML(content io.Reader) (project gopom.Project, err error) {
 	decoder := xml.NewDecoder(content)
 	// prevent against warnings for "xml: encoding "iso-8859-1" declared but Decoder.CharsetReader is nil"
@@ -106,6 +125,17 @@ func decodePomXML(content io.Reader) (project gopom.Project, err error) {
 	}
 
 	return project, nil
+}
+
+func decodePomXMLGroup(content io.Reader) (projects []gopom.Project, err error) {
+	decoder := xml.NewDecoder(content)
+	// prevent against warnings for "xml: encoding "iso-8859-1" declared but Decoder.CharsetReader is nil"
+	decoder.CharsetReader = charset.NewReaderLabel
+	if err := decoder.Decode(&projects); err != nil {
+		return projects, fmt.Errorf("unable to unmarshal pom.xml: %w", err)
+	}
+
+	return projects, nil
 }
 
 func pomParent(pom gopom.Project, parent gopom.Parent) (result *pkg.PomParent) {

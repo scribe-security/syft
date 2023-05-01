@@ -129,7 +129,8 @@ func (c *Cataloger) Catalog(resolver source.FileResolver) ([]pkg.Package, []arti
 		discoveredPackages, discoveredRelationships, err := parser(resolver, &env, source.NewLocationReadCloser(location, contentReader))
 		internal.CloseAndLogError(contentReader, location.VirtualPath)
 		if err != nil {
-			logger.WithFields("location", location.RealPath, "error", err).Warnf("cataloger failed")
+			// logger.WithFields("location", location.RealPath, "error", err).Warnf("cataloger failed")
+			logger.Warnf("cataloger failed, %s on location %s", err, location.RealPath)
 			continue
 		}
 

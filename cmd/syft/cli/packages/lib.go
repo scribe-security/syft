@@ -72,7 +72,7 @@ import (
 // }
 
 func RunLib(ctx context.Context, app *config.Application, args []string) (*sbom.SBOM, error) {
-	err := validateOutputOptions(app)
+	err := ValidateOutputOptions(app)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func RunLib(ctx context.Context, app *config.Application, args []string) (*sbom.
 
 	// could be an image or a directory, with or without a scheme
 	userInput := args[0]
-	si, err := source.ParseInputWithName(userInput, app.Platform, true, app.Name)
+	si, err := source.ParseInputWithName(userInput, app.Platform, app.Name, app.DefaultImagePullSource)
 	if err != nil {
 		return nil, fmt.Errorf("could not generate source input for packages command: %w", err)
 	}

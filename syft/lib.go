@@ -24,9 +24,11 @@ import (
 	"github.com/anchore/go-logger"
 	"github.com/anchore/syft/internal/bus"
 	"github.com/anchore/syft/internal/config"
-	"github.com/anchore/syft/internal/formats/syftjson/model"
+
+	// "github.com/anchore/syft/internal/formats/syftjson/model"
 	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/syft/artifact"
+	"github.com/anchore/syft/syft/formats/syftjson/model"
 	"github.com/anchore/syft/syft/linux"
 	"github.com/anchore/syft/syft/pkg"
 	"github.com/anchore/syft/syft/pkg/cataloger"
@@ -34,8 +36,9 @@ import (
 )
 
 type Application = config.Application
-type Anchore = config.Anchore
-type CliOnlyOptions = config.CliOnlyOptions
+
+// type Anchore = config.Anchore
+// type CliOnlyOptions = config.CliOnlyOptions
 type Pkg = config.Pkg
 type FileMetadata = config.FileMetadata
 type FileClassification = config.FileClassification

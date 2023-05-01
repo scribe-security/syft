@@ -225,14 +225,14 @@ func hasFullWord(targetPhrase, candidate string) bool {
 	return true
 }
 
-func SelectGroup(cfg Config) ([]Cataloger, error) {
+func SelectGroup(cfg Config) ([]pkg.Cataloger, error) {
 	switch cfg.CatalogerGroup {
 	case IndexGroup:
 		log.Info("cataloging index group")
-		return IndexCatalogers(cfg), nil
+		return DirectoryCatalogers(cfg), nil
 	case InstallationGroup:
 		log.Info("cataloging installation group")
-		return InstallationCatalogers(cfg), nil
+		return ImageCatalogers(cfg), nil
 	case AllGroup:
 		log.Info("cataloging all group")
 		return AllCatalogers(cfg), nil

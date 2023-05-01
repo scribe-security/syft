@@ -172,9 +172,11 @@ func RequestedAllCatalogers(cfg Config) bool {
 
 func filterCatalogers(catalogers []pkg.Cataloger, enabledCatalogerPatterns []string) []pkg.Cataloger {
 	// if cataloger is not set, all applicable catalogers are enabled by default
+
 	if len(enabledCatalogerPatterns) == 0 {
 		return catalogers
 	}
+
 	for _, enableCatalogerPattern := range enabledCatalogerPatterns {
 		if enableCatalogerPattern == AllCatalogersPattern {
 			return catalogers
@@ -186,7 +188,7 @@ func filterCatalogers(catalogers []pkg.Cataloger, enabledCatalogerPatterns []str
 			keepCatalogers = append(keepCatalogers, cataloger)
 			continue
 		}
-		log.Infof("skipping cataloger %q", cataloger.Name())
+		log.Debugf("skipping cataloger %q", cataloger.Name())
 	}
 	return keepCatalogers
 }
@@ -198,7 +200,19 @@ func contains(enabledPartial []string, catalogerName string) bool {
 		if partial == "" {
 			continue
 		}
+
 		if hasFullWord(partial, catalogerName) {
+			return true
+		}
+
+		if strings.Contains(catalogerName, "go-mod") && partial == "binary" {
+			continue
+		}
+		if strings.Contains(catalogerName, "javascript") && partial == "java" {
+			continue
+		}
+
+		if strings.Contains(catalogerName, partial) {
 			return true
 		}
 	}

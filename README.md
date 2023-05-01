@@ -507,36 +507,6 @@ package:
     # same as -s ; SYFT_PACKAGE_CATALOGER_SCOPE env var
     scope: "squashed"
 
-<<<<<<< HEAD
-golang:
-   # search for go package licences in the GOPATH of the system running Syft, note that this is outside the
-   # container filesystem and potentially outside the root of a local directory scan
-   # SYFT_GOLANG_SEARCH_LOCAL_MOD_CACHE_LICENSES env var
-   search-local-mod-cache-licenses: false
-   
-   # specify an explicit go mod cache directory, if unset this defaults to $GOPATH/pkg/mod or $HOME/go/pkg/mod
-   # SYFT_GOLANG_LOCAL_MOD_CACHE_DIR env var
-   local-mod-cache-dir: ""
-
-   # search for go package licences by retrieving the package from a network proxy
-   # SYFT_GOLANG_SEARCH_REMOTE_LICENSES env var
-   search-remote-licenses: false
-
-   # remote proxy to use when retrieving go packages from the network,
-   # if unset this defaults to $GOPROXY followed by https://proxy.golang.org
-   # SYFT_GOLANG_PROXY env var
-   proxy: ""
-
-   # specifies packages which should not be fetched by proxy
-   # if unset this defaults to $GONOPROXY
-   # SYFT_GOLANG_NOPROXY env var
-   no-proxy: ""
-
-linux-kernel:
-   # whether to catalog linux kernel modules found within lib/modules/** directories
-   # SYFT_LINUX_KERNEL_CATALOG_MODULES env var
-   catalog-modules: true
-=======
   # Cataloger group select 
   # When Empty default select for each scheme - Dir:Index, Image:installed
   # Options: [index install all].
@@ -570,7 +540,6 @@ file-classification:
     # the search space to look for file classifications (options: all-layers, squashed)
     # SYFT_FILE_CLASSIFICATION_CATALOGER_SCOPE env var
     scope: "squashed"
->>>>>>> 4e090888 (conflict)
 
 # cataloging file contents is exposed through the power-user subcommand
 file-contents:

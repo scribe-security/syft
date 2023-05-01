@@ -48,28 +48,30 @@ func CatalogPackages(src *source.Source, cfg cataloger.Config) (*pkg.Collection,
 		log.Info("could not identify distro")
 	}
 
-	// if the catalogers have been configured, use them regardless of input type
-	var catalogers []pkg.Cataloger
-	if len(cfg.Catalogers) > 0 {
-		catalogers = cataloger.AllCatalogers(cfg)
-	} else {
-		// otherwise conditionally use the correct set of loggers based on the input type (container image or directory)
+	// conditionally use the correct set of catalogers based on the scheme (container image or directory)
+	if cfg.CatalogerGroup == "" {
 		switch src.Metadata.Scheme {
 		case source.ImageScheme:
-			log.Info("cataloging image")
-			catalogers = cataloger.ImageCatalogers(cfg)
+			cfg.CatalogerGroup = cataloger.InstallationGroup
 		case source.FileScheme:
-			log.Info("cataloging file")
-			catalogers = cataloger.AllCatalogers(cfg)
+			cfg.CatalogerGroup = cataloger.AllGroup
 		case source.DirectoryScheme:
-			log.Info("cataloging directory")
-			catalogers = cataloger.DirectoryCatalogers(cfg)
+			cfg.CatalogerGroup = cataloger.IndexGroup
 		default:
 			return nil, nil, nil, fmt.Errorf("unable to determine cataloger set from scheme=%+v", src.Metadata.Scheme)
 		}
 	}
 
-	catalog, relationships, err := cataloger.Catalog(resolver, release, cfg.Parallelism, catalogers...)
+	groupCatalogers, err := cataloger.SelectGroup(cfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	enabledCatalogers := cataloger.FilterCatalogers(cfg, groupCatalogers)
+
+	catalog, relationships, err := cataloger.Catalog(resolver, release, cfg.Parallelism, enabledCatalogers...)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	relationships = append(relationships, newSourceRelationshipsFromCatalog(src, catalog)...)
 

@@ -507,6 +507,7 @@ package:
     # same as -s ; SYFT_PACKAGE_CATALOGER_SCOPE env var
     scope: "squashed"
 
+<<<<<<< HEAD
 golang:
    # search for go package licences in the GOPATH of the system running Syft, note that this is outside the
    # container filesystem and potentially outside the root of a local directory scan
@@ -535,6 +536,41 @@ linux-kernel:
    # whether to catalog linux kernel modules found within lib/modules/** directories
    # SYFT_LINUX_KERNEL_CATALOG_MODULES env var
    catalog-modules: true
+=======
+  # Cataloger group select 
+  # When Empty default select for each scheme - Dir:Index, Image:installed
+  # Options: [index install all].
+  # cataloger-group: ""
+
+  # enable specific language or ecosystem cataloger
+  # default: select catalogers out of group
+  # catalogers:
+  # - "ruby-gemfile-cataloger"
+  # - "ruby-gemspec-cataloger"
+  # - "python-index-cataloger"
+  # - "python-package-cataloger"
+  # - "javascript-lock-cataloger"
+  # - "javascript-package-cataloger"
+  # - "php-composer-installed-cataloger"
+  # - "php-composer-lock-cataloger"
+  # - "dpkgdb-cataloger"
+  # - "rpmdb-cataloger"
+  # - "java-cataloger"
+  # - "apkdb-cataloger"
+  # - "go-module-binary-cataloger"
+  catalogers:
+
+# cataloging file classifications is exposed through the power-user subcommand
+file-classification:
+  cataloger:
+    # enable/disable cataloging of file classifications
+    # SYFT_FILE_CLASSIFICATION_CATALOGER_ENABLED env var
+    enabled: true
+
+    # the search space to look for file classifications (options: all-layers, squashed)
+    # SYFT_FILE_CLASSIFICATION_CATALOGER_SCOPE env var
+    scope: "squashed"
+>>>>>>> 4e090888 (conflict)
 
 # cataloging file contents is exposed through the power-user subcommand
 file-contents:

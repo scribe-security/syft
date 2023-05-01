@@ -67,6 +67,7 @@ type Application struct {
 
 func (cfg Application) ToCatalogerConfig() cataloger.Config {
 	return cataloger.Config{
+
 		Search: cataloger.SearchConfig{
 			IncludeIndexedArchives:   cfg.Package.SearchIndexedArchives,
 			IncludeUnindexedArchives: cfg.Package.SearchUnindexedArchives,
@@ -83,6 +84,7 @@ func (cfg Application) ToCatalogerConfig() cataloger.Config {
 		LinuxKernel: kernel.LinuxCatalogerConfig{
 			CatalogModules: cfg.LinuxKernel.CatalogModules,
 		},
+		CatalogerGroup: cfg.Package.CatalogerGroup,
 	}
 }
 

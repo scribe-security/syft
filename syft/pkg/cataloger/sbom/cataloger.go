@@ -16,6 +16,7 @@ func NewSBOMCataloger() *generic.Cataloger {
 	return generic.NewCataloger(catalogerName).
 		WithParserByGlobs(parseSBOM,
 			"**/*.syft.json",
+			"**/bom.json",
 			"**/*.bom.*",
 			"**/*.bom",
 			"**/bom",

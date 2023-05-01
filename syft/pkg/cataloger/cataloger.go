@@ -65,7 +65,7 @@ type Cataloger interface {
 }
 
 // InstallationCatalogers returns a slice of locally implemented catalogers that are fit for detecting installations of packages.
-func InstallationCatalogers(cfg Config) []pkg.Cataloger {
+func ImageCatalogers(cfg Config) []pkg.Cataloger {
 	return filterCatalogers([]pkg.Cataloger{
 		alpm.NewAlpmdbCataloger(),
 		ruby.NewGemSpecCataloger(),

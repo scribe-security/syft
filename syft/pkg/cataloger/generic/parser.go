@@ -11,4 +11,4 @@ type Environment struct {
 	LinuxRelease *linux.Release
 }
 
-type Parser func(source.FileResolver, *Environment, source.LocationReadCloser) ([]pkg.Package, []artifact.Relationship, error)
+type Parser func(source.FileResolver, *Environment, source.LocationReadCloser) ([]pkg.Package, []artifact.Relationship, []pkg.Vulnerability, error)

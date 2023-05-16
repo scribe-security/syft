@@ -66,6 +66,24 @@ func hasMetadata(p pkg.Package) bool {
 	return p.Metadata != nil
 }
 
+func decodeVulnerability(c *cyclonedx.Vulnerability) *pkg.Vulnerability {
+	values := map[string]string{}
+	if c.Properties != nil {
+		for _, p := range *c.Properties {
+			values[p.Name] = p.Value
+		}
+	}
+
+	p := &pkg.Vulnerability{
+		Name:          c.Source.Name,
+		Locations:     decodeLocations(values),
+		Vulnerability: *c,
+	}
+
+	common.DecodeInto(p, values, "syft:vulnerability", CycloneDXFields)
+	return p
+}
+
 func decodeComponent(c *cyclonedx.Component) *pkg.Package {
 	values := map[string]string{}
 	if c.Properties != nil {

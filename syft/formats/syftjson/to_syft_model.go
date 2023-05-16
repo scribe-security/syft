@@ -1,6 +1,7 @@
 package syftjson
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -25,7 +26,7 @@ func toSyftModel(doc model.Document) (*sbom.SBOM, error) {
 	catalog := toSyftCatalog(doc.Artifacts, idAliases)
 
 	fileArtifacts := toSyftFiles(doc.Files)
-
+	fmt.Println("############## toSyftModel")
 	return &sbom.SBOM{
 		Artifacts: sbom.Artifacts{
 			PackageCatalog:    catalog,

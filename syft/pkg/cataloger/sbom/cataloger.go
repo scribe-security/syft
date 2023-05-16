@@ -30,15 +30,15 @@ func NewSBOMCataloger() *generic.Cataloger {
 		)
 }
 
-func parseSBOM(_ source.FileResolver, _ *generic.Environment, reader source.LocationReadCloser) ([]pkg.Package, []artifact.Relationship, error) {
+func parseSBOM(_ source.FileResolver, _ *generic.Environment, reader source.LocationReadCloser) ([]pkg.Package, []pkg.Vulnerability, []artifact.Relationship, error) {
 	s, _, err := formats.Decode(reader)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if s == nil {
 		log.WithFields("path", reader.Location.RealPath).Trace("file is not an SBOM")
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	var pkgs []pkg.Package
@@ -61,5 +61,5 @@ func parseSBOM(_ source.FileResolver, _ *generic.Environment, reader source.Loca
 		})
 	}
 
-	return pkgs, relationships, nil
+	return pkgs, s.Vulnerabilities, relationships, nil
 }

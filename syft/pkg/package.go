@@ -8,11 +8,39 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/syft/artifact"
 	"github.com/anchore/syft/syft/cpe"
 	"github.com/anchore/syft/syft/source"
 )
+
+type Vulnerability struct {
+	id                      artifact.ID        `hash:"ignore"`
+	Name                    string             // the package name
+	FoundBy                 string             `hash:"ignore" cyclonedx:"foundBy"` // the specific cataloger that discovered this package
+	Locations               source.LocationSet // the locations that lead to the discovery of this package (note: this is not necessarily the locations that make up this package)
+	PURL                    string             `hash:"ignore"` // the Package URL (see https://github.com/package-url/purl-spec)
+	cyclonedx.Vulnerability `json:",inline,omitempty" xml:",inline,omitempty"`
+}
+
+func (p *Vulnerability) OverrideID(id artifact.ID) {
+	p.id = id
+}
+
+func (p *Vulnerability) SetID() {
+	id, err := artifact.IDByHash(p)
+	if err != nil {
+		// TODO: what to do in this case?
+		log.Warnf("unable to get fingerprint of package=%s@%s: %+v", p.Name, p.Vulnerability.CWEs, err)
+		return
+	}
+	p.id = id
+}
+
+func (p Vulnerability) ID() artifact.ID {
+	return p.id
+}
 
 // Package represents an application or library that has been bundled into a distributable format.
 // TODO: if we ignore FoundBy for ID generation should we merge the field to show it was found in two places?

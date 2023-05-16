@@ -1,6 +1,7 @@
 package cyclonedxjson
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -10,6 +11,8 @@ import (
 )
 
 func encoder(output io.Writer, s sbom.SBOM) error {
+	fmt.Println("########################################## ENCODE JSON", s.Vulnerabilities)
+
 	bom := cyclonedxhelpers.ToFormatModel(s)
 	enc := cyclonedx.NewBOMEncoder(output, cyclonedx.BOMFileFormatJSON)
 	enc.SetPretty(true)

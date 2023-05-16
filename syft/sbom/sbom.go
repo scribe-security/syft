@@ -13,10 +13,11 @@ import (
 )
 
 type SBOM struct {
-	Artifacts     Artifacts
-	Relationships []artifact.Relationship
-	Source        source.Metadata
-	Descriptor    Descriptor
+	Artifacts       Artifacts
+	Vulnerabilities []pkg.Vulnerability
+	Relationships   []artifact.Relationship
+	Source          source.Metadata
+	Descriptor      Descriptor
 }
 
 type Artifacts struct {

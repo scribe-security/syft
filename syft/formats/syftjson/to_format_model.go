@@ -24,7 +24,6 @@ func ToFormatModel(s sbom.SBOM) model.Document {
 	if err != nil {
 		log.Warnf("unable to create syft-json source object: %+v", err)
 	}
-	fmt.Println("######################################### ToFormatModel", s.Vulnerabilities)
 	return model.Document{
 		Artifacts:             toPackageModels(s.Artifacts.Packages),
 		ArtifactRelationships: toRelationshipModel(s.Relationships),

@@ -10,7 +10,6 @@ import (
 	"github.com/anchore/syft/cmd/syft/cli/options"
 	"github.com/anchore/syft/internal/bus"
 	"github.com/anchore/syft/internal/config"
-	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/internal/ui"
 	"github.com/anchore/syft/syft"
 	"github.com/anchore/syft/syft/event"
@@ -77,16 +76,10 @@ func RunLib(ctx context.Context, app *config.Application, args []string) (*sbom.
 		return nil, err
 	}
 
-	writer, err := options.MakeWriter(app.Outputs, app.File, app.OutputTemplatePath)
+	writer, err := options.MakeSBOMWriter(app.Outputs, app.File, app.OutputTemplatePath)
 	if err != nil {
 		return nil, err
 	}
-
-	defer func() {
-		if err := writer.Close(); err != nil {
-			log.Warnf("unable to write to report destination: %w", err)
-		}
-	}()
 
 	// could be an image or a directory, with or without a scheme
 	userInput := args[0]

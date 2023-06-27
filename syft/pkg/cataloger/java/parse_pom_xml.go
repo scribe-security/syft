@@ -11,7 +11,6 @@ import (
 	"github.com/vifraa/gopom"
 	"golang.org/x/net/html/charset"
 
-	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/syft/artifact"
 	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/pkg"
@@ -30,15 +29,11 @@ func parserPomXML(_ file.Resolver, _ *generic.Environment, reader file.LocationR
 
 	var pkgs []pkg.Package
 	for _, dep := range pom.Dependencies {
-		p, err := newPackageFromPom(
+		p := newPackageFromPom(
 			pom,
 			dep,
 			reader.Location.WithAnnotation(pkg.EvidenceAnnotationKey, pkg.PrimaryEvidenceAnnotation),
 		)
-		if err != nil {
-			log.Debugf("Skipping package, Dep: %s, Err: %s", dep, err)
-			continue
-		}
 		if p.Name == "" {
 			continue
 		}

@@ -13,16 +13,16 @@ import (
 
 	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/syft/artifact"
+	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/pkg"
 	"github.com/anchore/syft/syft/pkg/cataloger/generic"
-	"github.com/anchore/syft/syft/source"
 )
 
 const pomXMLGlob = "*pom.xml"
 
 var propertyMatcher = regexp.MustCompile("[$][{][^}]+[}]")
 
-func parserPomXML(_ source.FileResolver, _ *generic.Environment, reader source.LocationReadCloser) ([]pkg.Package, []artifact.Relationship, error) {
+func parserPomXML(_ file.Resolver, _ *generic.Environment, reader file.LocationReadCloser) ([]pkg.Package, []artifact.Relationship, error) {
 	pom, err := decodePomXML(reader)
 	if err != nil {
 		return nil, nil, err
@@ -70,24 +70,22 @@ func newPomProject(path string, p gopom.Project) *pkg.PomProject {
 	}
 }
 
-func newPackageFromPom(pom gopom.Project, dep gopom.Dependency, locations ...source.Location) (pkg.Package, error) {
+func newPackageFromPom(pom gopom.Project, dep gopom.Dependency, locations ...file.Location) pkg.Package {
 	m := pkg.JavaMetadata{
 		PomProperties: &pkg.PomProperties{
-			GroupID: resolveProperty(pom, dep.GroupID),
-			Scope:   dep.Scope,
+			GroupID:    resolveProperty(pom, dep.GroupID),
+			ArtifactID: resolveProperty(pom, dep.ArtifactID),
+			Scope:      resolveProperty(pom, dep.Scope),
 		},
 	}
 
 	name := dep.ArtifactID
-	version, err := resolvePropertyFail(pom, dep.Version)
-	if err != nil {
-		return pkg.Package{}, err
-	}
+	version := resolveProperty(pom, dep.Version)
 
 	p := pkg.Package{
 		Name:         name,
 		Version:      version,
-		Locations:    source.NewLocationSet(locations...),
+		Locations:    file.NewLocationSet(locations...),
 		PURL:         packageURL(name, version, m),
 		Language:     pkg.Java,
 		Type:         pkg.JavaPkg, // TODO: should we differentiate between packages from jar/war/zip versus packages from a pom.xml that were not installed yet?
@@ -97,7 +95,7 @@ func newPackageFromPom(pom gopom.Project, dep gopom.Dependency, locations ...sou
 
 	p.SetID()
 
-	return p, nil
+	return p
 }
 
 func decodePomXML(content io.Reader) (project gopom.Project, err error) {

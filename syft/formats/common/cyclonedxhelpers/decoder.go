@@ -73,7 +73,7 @@ func ToSyftModel(bom *cyclonedx.BOM) (*sbom.SBOM, error) {
 
 	s := &sbom.SBOM{
 		Artifacts: sbom.Artifacts{
-			PackageCatalog:    pkg.NewCollection(),
+			Packages:          pkg.NewCollection(),
 			LinuxDistribution: linuxReleaseFromComponents(*bom.Components),
 		},
 		Source:     extractComponents(bom.Metadata),
@@ -83,6 +83,10 @@ func ToSyftModel(bom *cyclonedx.BOM) (*sbom.SBOM, error) {
 	idMap := make(map[string]interface{})
 
 	if err := collectBomPackages(bom, s, idMap); err != nil {
+		return nil, err
+	}
+
+	if err := collectBomVulnerabilities(bom, s, idMap); err != nil {
 		return nil, err
 	}
 
@@ -101,6 +105,16 @@ func collectBomPackages(bom *cyclonedx.BOM, s *sbom.SBOM, idMap map[string]inter
 	return nil
 }
 
+func collectBomVulnerabilities(bom *cyclonedx.BOM, s *sbom.SBOM, idMap map[string]interface{}) error {
+	if bom.Components == nil {
+		return fmt.Errorf("no components are defined in the CycloneDX BOM")
+	}
+	for i := range *bom.Vulnerabilities {
+		collectVulnerabilities(&(*bom.Vulnerabilities)[i], s, idMap)
+	}
+	return nil
+}
+
 func collectPackages(component *cyclonedx.Component, s *sbom.SBOM, idMap map[string]interface{}) {
 	switch component.Type {
 	case cyclonedx.ComponentTypeOS:
@@ -114,7 +128,7 @@ func collectPackages(component *cyclonedx.Component, s *sbom.SBOM, idMap map[str
 		}
 		// TODO there must be a better way than needing to call this manually:
 		p.SetID()
-		s.Artifacts.PackageCatalog.Add(*p)
+		s.Artifacts.Packages.Add(*p)
 	}
 
 	if component.Components != nil {
@@ -220,12 +234,43 @@ func getPropertyValue(component *cyclonedx.Component, name string) string {
 	return ""
 }
 
+func collectVulnerabilities(vuln *cyclonedx.Vulnerability, s *sbom.SBOM, idMap map[string]interface{}) {
+	p := decodeVulnerability(vuln)
+	idMap[vuln.BOMRef] = p
+
+	syftID := extractSyftPacakgeID(vuln.BOMRef)
+	if syftID != "" {
+		idMap[syftID] = p
+	}
+	// TODO there must be a better way than needing to call this manually:
+	p.SetID()
+	// s.Artifacts.PackageCatalog.Add(*p)
+	s.Vulnerabilities = append(s.Vulnerabilities, *p)
+	if vuln.Affects == nil {
+		return
+	} else {
+		for _, eff := range *vuln.Affects {
+			to, toExists := idMap[eff.Ref].(artifact.Identifiable)
+			if !toExists {
+				continue
+			}
+
+			s.Relationships = append(s.Relationships, artifact.Relationship{
+				From: p,
+				To:   to,
+				Type: artifact.ContainsRelationship,
+			})
+		}
+	}
+
+}
+
 func collectRelationships(bom *cyclonedx.BOM, s *sbom.SBOM, idMap map[string]interface{}) {
 	if bom.Dependencies == nil {
 		return
 	}
 	for _, d := range *bom.Dependencies {
-		from, fromExists := idMap[d.Ref].(artifact.Identifiable)
+		to, fromExists := idMap[d.Ref].(artifact.Identifiable)
 		if !fromExists {
 			continue
 		}
@@ -235,7 +280,7 @@ func collectRelationships(bom *cyclonedx.BOM, s *sbom.SBOM, idMap map[string]int
 		}
 
 		for _, t := range *d.Dependencies {
-			to, toExists := idMap[t].(artifact.Identifiable)
+			from, toExists := idMap[t].(artifact.Identifiable)
 			if !toExists {
 				continue
 			}

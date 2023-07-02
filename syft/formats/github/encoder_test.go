@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/anchore/packageurl-go"
+	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/linux"
 	"github.com/anchore/syft/syft/pkg"
 	"github.com/anchore/syft/syft/sbom"
@@ -28,15 +29,15 @@ func Test_toGithubModel(t *testing.T) {
 				VersionID: "18.04",
 				IDLike:    []string{"debian"},
 			},
-			PackageCatalog: pkg.NewCollection(),
+			Packages: pkg.NewCollection(),
 		},
 	}
 	for _, p := range []pkg.Package{
 		{
 			Name:    "pkg-1",
 			Version: "1.0.1",
-			Locations: source.NewLocationSet(
-				source.NewLocationFromCoordinates(source.Coordinates{
+			Locations: file.NewLocationSet(
+				file.NewLocationFromCoordinates(file.Coordinates{
 					RealPath:     "/usr/lib",
 					FileSystemID: "fsid-1",
 				}),
@@ -45,8 +46,8 @@ func Test_toGithubModel(t *testing.T) {
 		{
 			Name:    "pkg-2",
 			Version: "2.0.2",
-			Locations: source.NewLocationSet(
-				source.NewLocationFromCoordinates(source.Coordinates{
+			Locations: file.NewLocationSet(
+				file.NewLocationFromCoordinates(file.Coordinates{
 					RealPath:     "/usr/lib",
 					FileSystemID: "fsid-1",
 				}),
@@ -55,8 +56,8 @@ func Test_toGithubModel(t *testing.T) {
 		{
 			Name:    "pkg-3",
 			Version: "3.0.3",
-			Locations: source.NewLocationSet(
-				source.NewLocationFromCoordinates(source.Coordinates{
+			Locations: file.NewLocationSet(
+				file.NewLocationFromCoordinates(file.Coordinates{
 					RealPath:     "/etc",
 					FileSystemID: "fsid-1",
 				}),
@@ -71,7 +72,7 @@ func Test_toGithubModel(t *testing.T) {
 			nil,
 			"",
 		).ToString()
-		s.Artifacts.PackageCatalog.Add(p)
+		s.Artifacts.Packages.Add(p)
 	}
 
 	actual := toGithubModel(&s)

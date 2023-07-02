@@ -6,9 +6,9 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 
 	"github.com/anchore/packageurl-go"
+	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/formats/common"
 	"github.com/anchore/syft/syft/pkg"
-	"github.com/anchore/syft/syft/source"
 )
 
 func encodeComponent(p pkg.Package) cyclonedx.Component {
@@ -66,6 +66,24 @@ func hasMetadata(p pkg.Package) bool {
 	return p.Metadata != nil
 }
 
+func decodeVulnerability(c *cyclonedx.Vulnerability) *pkg.Vulnerability {
+	values := map[string]string{}
+	if c.Properties != nil {
+		for _, p := range *c.Properties {
+			values[p.Name] = p.Value
+		}
+	}
+
+	p := &pkg.Vulnerability{
+		Name:          c.Source.Name,
+		Locations:     decodeLocations(values),
+		Vulnerability: *c,
+	}
+
+	common.DecodeInto(p, values, "syft:vulnerability", CycloneDXFields)
+	return p
+}
+
 func decodeComponent(c *cyclonedx.Component) *pkg.Package {
 	values := map[string]string{}
 	if c.Properties != nil {
@@ -78,7 +96,7 @@ func decodeComponent(c *cyclonedx.Component) *pkg.Package {
 		Name:      c.Name,
 		Version:   c.Version,
 		Locations: decodeLocations(values),
-		Licenses:  decodeLicenses(c),
+		Licenses:  pkg.NewLicenseSet(decodeLicenses(c)...),
 		CPEs:      decodeCPEs(c),
 		PURL:      c.PackageURL,
 	}
@@ -100,13 +118,13 @@ func decodeComponent(c *cyclonedx.Component) *pkg.Package {
 	return p
 }
 
-func decodeLocations(vals map[string]string) source.LocationSet {
-	v := common.Decode(reflect.TypeOf([]source.Location{}), vals, "syft:location", CycloneDXFields)
-	out, ok := v.([]source.Location)
+func decodeLocations(vals map[string]string) file.LocationSet {
+	v := common.Decode(reflect.TypeOf([]file.Location{}), vals, "syft:location", CycloneDXFields)
+	out, ok := v.([]file.Location)
 	if !ok {
 		out = nil
 	}
-	return source.NewLocationSet(out...)
+	return file.NewLocationSet(out...)
 }
 
 func decodePackageMetadata(vals map[string]string, c *cyclonedx.Component, typ pkg.MetadataType) interface{} {

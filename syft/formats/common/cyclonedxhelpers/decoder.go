@@ -91,9 +91,9 @@ func ToSyftModel(bom *cyclonedx.BOM) (*sbom.SBOM, error) {
 		return nil, err
 	}
 
-	if err := collectBomVulnerabilities(bom, s, idMap); err != nil {
-		return nil, err
-	}
+	// if err := collectBomVulnerabilities(bom, s, idMap); err != nil {
+	// 	return nil, err
+	// }
 
 	collectRelationships(bom, s, idMap)
 

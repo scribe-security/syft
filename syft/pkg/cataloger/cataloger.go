@@ -6,9 +6,11 @@ catalogers defined in child packages as well as the interface definition to impl
 package cataloger
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/anchore/syft/internal/log"
+	"github.com/anchore/syft/syft/artifact"
 	"github.com/anchore/syft/syft/pkg"
 	"github.com/anchore/syft/syft/pkg/cataloger/alpm"
 	"github.com/anchore/syft/syft/pkg/cataloger/apkdb"
@@ -34,6 +36,7 @@ import (
 	"github.com/anchore/syft/syft/pkg/cataloger/rust"
 	"github.com/anchore/syft/syft/pkg/cataloger/sbom"
 	"github.com/anchore/syft/syft/pkg/cataloger/swift"
+	"github.com/anchore/syft/syft/source"
 )
 
 const AllCatalogersPattern = "all"
@@ -62,8 +65,8 @@ type Cataloger interface {
 }
 
 // InstallationCatalogers returns a slice of locally implemented catalogers that are fit for detecting installations of packages.
-func InstallationCatalogers(cfg Config) []Cataloger {
-	return []Cataloger{
+func InstallationCatalogers(cfg Config) []pkg.Cataloger {
+	return []pkg.Cataloger{
 		alpm.NewAlpmdbCataloger(),
 		apkdb.NewApkdbCataloger(),
 		binary.NewCataloger(),

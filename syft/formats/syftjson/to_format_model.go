@@ -24,6 +24,7 @@ func ToFormatModel(s sbom.SBOM) model.Document {
 	return model.Document{
 		Artifacts:             toPackageModels(s.Artifacts.Packages),
 		ArtifactRelationships: toRelationshipModel(s.Relationships),
+		Vulnerabilities:       toVulnerabilitiesModel(s.Vulnerabilities),
 		Files:                 toFile(s),
 		Secrets:               toSecrets(s.Artifacts.Secrets),
 		Source:                toSourceModel(s.Source),
@@ -237,6 +238,24 @@ func toPackageModel(p pkg.Package) model.Package {
 			MetadataType: p.MetadataType,
 			Metadata:     p.Metadata,
 		},
+	}
+}
+
+func toVulnerabilitiesModel(vulnList []pkg.Vulnerability) []model.Vulnerability {
+	var modelList []model.Vulnerability
+	for _, vuln := range vulnList {
+		modelList = append(modelList, toVulnerabilityModel(vuln))
+	}
+
+	return modelList
+}
+
+func toVulnerabilityModel(vuln pkg.Vulnerability) model.Vulnerability {
+	return model.Vulnerability{
+		ID:        string(vuln.ID()),
+		Name:      vuln.Name,
+		FoundBy:   vuln.FoundBy,
+		Locations: vuln.Locations.ToSlice(),
 	}
 }
 

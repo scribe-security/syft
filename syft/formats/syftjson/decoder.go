@@ -14,6 +14,8 @@ import (
 )
 
 func decoder(reader io.Reader) (*sbom.SBOM, error) {
+
+	fmt.Println("######## SYFTJSON  DECODER")
 	dec := json.NewDecoder(reader)
 
 	var doc model.Document

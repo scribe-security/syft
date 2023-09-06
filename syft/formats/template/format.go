@@ -46,6 +46,7 @@ func (f OutputFormat) Encode(output io.Writer, s sbom.SBOM) error {
 		return err
 	}
 
+	fmt.Println("############################################### ENCODE", s.Vulnerabilities)
 	doc := syftjson.ToFormatModel(s)
 	return tmpl.Execute(output, doc)
 }

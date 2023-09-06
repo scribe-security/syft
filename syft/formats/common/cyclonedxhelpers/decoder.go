@@ -91,6 +91,10 @@ func ToSyftModel(bom *cyclonedx.BOM) (*sbom.SBOM, error) {
 		return nil, err
 	}
 
+	if err := collectBomVulnerabilities(bom, s, idMap); err != nil {
+		return nil, err
+	}
+
 	collectRelationships(bom, s, idMap)
 
 	return s, nil
@@ -102,6 +106,16 @@ func collectBomPackages(bom *cyclonedx.BOM, s *sbom.SBOM, idMap map[string]inter
 	}
 	for i := range *bom.Components {
 		collectPackages(&(*bom.Components)[i], s, idMap)
+	}
+	return nil
+}
+
+func collectBomVulnerabilities(bom *cyclonedx.BOM, s *sbom.SBOM, idMap map[string]interface{}) error {
+	if bom.Components == nil {
+		return fmt.Errorf("no components are defined in the CycloneDX BOM")
+	}
+	for i := range *bom.Vulnerabilities {
+		collectVulnerabilities(&(*bom.Vulnerabilities)[i], s, idMap)
 	}
 	return nil
 }
@@ -223,6 +237,41 @@ func getPropertyValue(component *cyclonedx.Component, name string) string {
 		}
 	}
 	return ""
+}
+
+func collectVulnerabilities(vuln *cyclonedx.Vulnerability, s *sbom.SBOM, idMap map[string]interface{}) {
+	fmt.Println("##################### collectVulnerabilities")
+
+	p := decodeVulnerability(vuln)
+	idMap[vuln.BOMRef] = p
+
+	syftID := extractSyftPacakgeID(vuln.BOMRef)
+	if syftID != "" {
+		idMap[syftID] = p
+	}
+	// TODO there must be a better way than needing to call this manually:
+	p.SetID()
+	// s.Artifacts.PackageCatalog.Add(*p)
+	s.Vulnerabilities = append(s.Vulnerabilities, *p)
+	fmt.Println("##################### collectVulnerabilities", p)
+
+	if vuln.Affects == nil {
+		return
+	} else {
+		for _, eff := range *vuln.Affects {
+			to, toExists := idMap[eff.Ref].(artifact.Identifiable)
+			if !toExists {
+				continue
+			}
+
+			s.Relationships = append(s.Relationships, artifact.Relationship{
+				From: p,
+				To:   to,
+				Type: artifact.ContainsRelationship,
+			})
+		}
+	}
+
 }
 
 func collectRelationships(bom *cyclonedx.BOM, s *sbom.SBOM, idMap map[string]interface{}) {

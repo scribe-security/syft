@@ -28,7 +28,7 @@ func toSyftModel(doc model.Document) (*sbom.SBOM, error) {
 	catalog := toSyftCatalog(doc.Artifacts, idAliases)
 
 	fileArtifacts := toSyftFiles(doc.Files)
-
+	fmt.Println("############## toSyftModel")
 	return &sbom.SBOM{
 		Artifacts: sbom.Artifacts{
 			Packages:          catalog,

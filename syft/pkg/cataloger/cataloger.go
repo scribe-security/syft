@@ -40,6 +40,7 @@ import (
 )
 
 const AllCatalogersPattern = "all"
+
 type Group string
 
 const (
@@ -66,7 +67,7 @@ type Cataloger interface {
 
 // InstallationCatalogers returns a slice of locally implemented catalogers that are fit for detecting installations of packages.
 func InstallationCatalogers(cfg Config) []pkg.Cataloger {
-	return []pkg.Cataloger{
+	return filterCatalogers([]pkg.Cataloger{
 		alpm.NewAlpmdbCataloger(),
 		apkdb.NewApkdbCataloger(),
 		binary.NewCataloger(),
@@ -245,30 +246,6 @@ func SelectGroup(cfg Config) ([]Cataloger, error) {
 	}
 }
 
-func FilterCatalogers(cfg Config, groupCatalogers []Cataloger) []Cataloger {
+func FilterCatalogers(cfg Config, groupCatalogers []pkg.Cataloger) []pkg.Cataloger {
 	return filterCatalogers(groupCatalogers, cfg.Catalogers)
-}
-
-func filterCatalogers(catalogers []Cataloger, enabledCatalogers []string) []Cataloger {
-	// if enable-cataloger is not set, all applicable catalogers are enabled by default
-	if len(enabledCatalogers) == 0 {
-		return catalogers
-	}
-	var filteredCatalogers []Cataloger
-	for _, cataloger := range catalogers {
-		if contains(enabledCatalogers, cataloger.Name()) {
-			filteredCatalogers = append(filteredCatalogers, cataloger)
-		}
-	}
-	return filteredCatalogers
-}
-
-func contains(catalogers []string, str string) bool {
-	for _, cataloger := range catalogers {
-		if cataloger == str ||
-			fmt.Sprintf("%s-cataloger", cataloger) == str {
-			return true
-		}
-	}
-	return false
 }

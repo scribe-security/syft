@@ -48,31 +48,35 @@ func CatalogPackages(src source.Source, cfg cataloger.Config) (*pkg.Collection, 
 		log.Info("could not identify distro")
 	}
 
-	// if the catalogers have been configured, use them regardless of input type
 	var catalogers []pkg.Cataloger
 	if len(cfg.Catalogers) > 0 {
-		catalogers = cataloger.AllCatalogers(cfg)
+		cfg.CatalogerGroup = cataloger.AllGroup
 	} else {
-		// otherwise conditionally use the correct set of loggers based on the input type (container image or directory)
-
-		// TODO: this is bad, we should not be using the concrete type to determine the cataloger set
-		// instead this should be a caller concern (pass the catalogers you want to use). The SBOM build PR will do this.
-		switch src.(type) {
-		case *source.StereoscopeImageSource:
-			log.Info("cataloging an image")
-			catalogers = cataloger.ImageCatalogers(cfg)
-		case *source.FileSource:
-			log.Info("cataloging a file")
-			catalogers = cataloger.AllCatalogers(cfg)
-		case *source.DirectorySource:
-			log.Info("cataloging a directory")
-			catalogers = cataloger.DirectoryCatalogers(cfg)
-		default:
-			return nil, nil, nil, fmt.Errorf("unsupported source type: %T", src)
+		// conditionally use the correct set of catalogers based on the scheme (container image or directory)
+		if cfg.CatalogerGroup == "" {
+			switch src.Metadata.Scheme {
+			case source.ImageScheme:
+				cfg.CatalogerGroup = cataloger.InstallationGroup
+			case source.FileScheme:
+				cfg.CatalogerGroup = cataloger.AllGroup
+			case source.DirectoryScheme:
+				cfg.CatalogerGroup = cataloger.IndexGroup
+			default:
+				return nil, nil, nil, fmt.Errorf("unsupported source type: %T", src)
+			}
 		}
 	}
 
-	catalog, relationships, err := cataloger.Catalog(resolver, release, cfg.Parallelism, catalogers...)
+	groupCatalogers, err := cataloger.SelectGroup(cfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	enabledCatalogers := cataloger.FilterCatalogers(cfg, groupCatalogers)
+
+	catalog, relationships, err := cataloger.Catalog(resolver, release, cfg.Parallelism, enabledCatalogers...)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	// apply exclusions to the package catalog
 	// default config value for this is true

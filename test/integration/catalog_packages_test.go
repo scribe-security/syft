@@ -22,8 +22,8 @@ func BenchmarkImagePackageCatalogers(b *testing.B) {
 	imagetest.GetFixtureImage(b, "docker-archive", fixtureImageName)
 	tarPath := imagetest.GetFixtureImageTarPath(b, fixtureImageName)
 
-	var pc *pkg.Collection
-	for _, c := range cataloger.ImageCatalogers(cataloger.DefaultConfig()) {
+	var pc *pkg.Catalog
+	for _, c := range cataloger.InstallationCatalogers(cataloger.DefaultConfig()) {
 		// in case of future alteration where state is persisted, assume no dependency is safe to reuse
 		userInput := "docker-archive:" + tarPath
 		detection, err := source.Detect(userInput, source.DefaultDetectConfig())

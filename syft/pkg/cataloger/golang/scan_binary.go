@@ -32,7 +32,7 @@ func scanFile(reader unionreader.UnionReader, filename string) []*extendedBuildI
 	for _, r := range readers {
 		bi, err := getBuildInfo(r)
 		if err != nil {
-			log.WithFields("file", filename, "error", err).Trace("unable to read golang buildinfo")
+			// log.WithFields("file", filename, "error", err).Warn("unable to read golang buildinfo")
 			continue
 		}
 		// it's possible the reader just isn't a go binary, in which case just skip it

@@ -20,10 +20,19 @@ const cycloneDXXmlSchema = "http://cyclonedx.org/schema/bom"
 
 func GetValidator(format cyclonedx.BOMFileFormat) sbom.Validator {
 	return func(reader io.Reader) error {
-		bom := &cyclonedx.BOM{}
+		bom := &cyclonedx.BOM{
+			Components: &[]cyclonedx.Component{},
+		}
 		err := cyclonedx.NewBOMDecoder(reader, format).Decode(bom)
 		if err != nil {
 			return err
+		}
+
+		// Scribe patch: In order not to loose the metadata component in the aggregation Add sbom metadata to the subcontinents
+		if bom.Metadata.Component != nil {
+			components := *bom.Components
+			components = append(components, *bom.Metadata.Component)
+			bom.Components = &components
 		}
 
 		xmlWithoutNS := format == cyclonedx.BOMFileFormatXML && !strings.Contains(bom.XMLNS, cycloneDXXmlSchema)
@@ -39,10 +48,17 @@ func GetDecoder(format cyclonedx.BOMFileFormat) sbom.Decoder {
 		bom := &cyclonedx.BOM{
 			Components: &[]cyclonedx.Component{},
 		}
+
 		err := cyclonedx.NewBOMDecoder(reader, format).Decode(bom)
 		if err != nil {
 			return nil, err
 		}
+		if bom.Components != nil {
+			components := *bom.Components
+			components = append(components, *bom.Metadata.Component)
+			bom.Components = &components
+		}
+
 		s, err := ToSyftModel(bom)
 		if err != nil {
 			return nil, err

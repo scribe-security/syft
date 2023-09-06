@@ -29,7 +29,9 @@ func GetValidator(format cyclonedx.BOMFileFormat) sbom.Validator {
 		}
 
 		// Scribe patch: In order not to loose the metadata component in the aggregation Add sbom metadata to the subcontinents
-		if bom.Metadata.Component != nil {
+		if bom.Components != nil &&
+			bom.Metadata != nil &&
+			bom.Metadata.Component != nil {
 			components := *bom.Components
 			components = append(components, *bom.Metadata.Component)
 			bom.Components = &components
@@ -53,7 +55,9 @@ func GetDecoder(format cyclonedx.BOMFileFormat) sbom.Decoder {
 		if err != nil {
 			return nil, err
 		}
-		if bom.Components != nil {
+		if bom.Components != nil &&
+			bom.Metadata != nil &&
+			bom.Metadata.Component != nil {
 			components := *bom.Components
 			components = append(components, *bom.Metadata.Component)
 			bom.Components = &components

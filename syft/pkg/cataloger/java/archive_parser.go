@@ -98,6 +98,7 @@ func newJavaArchiveParser(reader file.LocationReadCloser, detectNested bool) (*a
 
 // parse the loaded archive and return all packages found.
 func (j *archiveParser) parse() ([]pkg.Package, []artifact.Relationship, error) {
+
 	var pkgs []pkg.Package
 	var relationships []artifact.Relationship
 

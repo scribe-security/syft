@@ -84,7 +84,7 @@ func (c *Collection) Add(pkgs ...Package) {
 	for _, p := range pkgs {
 		id := p.ID()
 		if id == "" {
-			log.Warnf("found package with empty ID while adding to the catalog: %+v", p)
+			// log.Warnf("found package with empty ID while adding to the catalog: %+v", p)
 			p.SetID()
 			id = p.ID()
 		}

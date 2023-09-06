@@ -240,8 +240,6 @@ func getPropertyValue(component *cyclonedx.Component, name string) string {
 }
 
 func collectVulnerabilities(vuln *cyclonedx.Vulnerability, s *sbom.SBOM, idMap map[string]interface{}) {
-	fmt.Println("##################### collectVulnerabilities")
-
 	p := decodeVulnerability(vuln)
 	idMap[vuln.BOMRef] = p
 
@@ -253,8 +251,6 @@ func collectVulnerabilities(vuln *cyclonedx.Vulnerability, s *sbom.SBOM, idMap m
 	p.SetID()
 	// s.Artifacts.PackageCatalog.Add(*p)
 	s.Vulnerabilities = append(s.Vulnerabilities, *p)
-	fmt.Println("##################### collectVulnerabilities", p)
-
 	if vuln.Affects == nil {
 		return
 	} else {

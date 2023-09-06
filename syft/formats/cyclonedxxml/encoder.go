@@ -1,7 +1,6 @@
 package cyclonedxxml
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -11,8 +10,6 @@ import (
 )
 
 func encoder(output io.Writer, s sbom.SBOM) error {
-	fmt.Println("###################### ENCODE XML", s.Vulnerabilities)
-
 	bom := cyclonedxhelpers.ToFormatModel(s)
 	enc := cyclonedx.NewBOMEncoder(output, cyclonedx.BOMFileFormatXML)
 	enc.SetPretty(true)

@@ -13,7 +13,6 @@ import (
 	"github.com/vifraa/gopom"
 	"golang.org/x/net/html/charset"
 
-	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/syft/artifact"
 	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/pkg"
@@ -31,6 +30,7 @@ func parserPomXML(_ file.Resolver, _ *generic.Environment, reader file.LocationR
 	}
 
 	var pkgs []pkg.Package
+<<<<<<< HEAD
 	if pom.Dependencies != nil {
 		for _, dep := range *pom.Dependencies {
 			p := newPackageFromPom(
@@ -41,6 +41,17 @@ func parserPomXML(_ file.Resolver, _ *generic.Environment, reader file.LocationR
 			if p.Name == "" {
 				continue
 			}
+=======
+	for _, dep := range pom.Dependencies {
+		p := newPackageFromPom(
+			pom,
+			dep,
+			reader.Location.WithAnnotation(pkg.EvidenceAnnotationKey, pkg.PrimaryEvidenceAnnotation),
+		)
+		if p.Name == "" {
+			continue
+		}
+>>>>>>> 129d8343 (conflict)
 
 			pkgs = append(pkgs, p)
 		}

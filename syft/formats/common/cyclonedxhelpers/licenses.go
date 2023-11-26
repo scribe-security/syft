@@ -10,6 +10,10 @@ import (
 	"github.com/anchore/syft/syft/pkg"
 )
 
+func EncodeLicenses(p pkg.Package) *cyclonedx.Licenses {
+	return encodeLicenses(p)
+}
+
 // This should be a function that just surfaces licenses already validated in the package struct
 func encodeLicenses(p pkg.Package) *cyclonedx.Licenses {
 	spdx, other, ex := separateLicenses(p)

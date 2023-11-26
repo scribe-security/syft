@@ -303,6 +303,11 @@ func toSyftCatalog(pkgs []model.Package, idAliases map[string]string) *pkg.Colle
 	return catalog
 }
 
+func ToSyftPackage(p model.Package) pkg.Package {
+	m := make(map[string]string)
+	return toSyftPackage(p, m)
+}
+
 func toSyftPackage(p model.Package, idAliases map[string]string) pkg.Package {
 	var cpes []cpe.CPE
 	for _, c := range p.CPEs {

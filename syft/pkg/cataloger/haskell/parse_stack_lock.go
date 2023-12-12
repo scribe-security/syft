@@ -86,7 +86,9 @@ func parseStackPackageEncoding(pkgEncoding string) (name, version, hash string) 
 	remainingEncoding := pkgEncoding[lastDashIdx+1:]
 	encodingSplits := strings.Split(remainingEncoding, "@")
 	version = encodingSplits[0]
-	startHash, endHash := strings.Index(encodingSplits[1], ":")+1, strings.Index(encodingSplits[1], ",")
-	hash = encodingSplits[1][startHash:endHash]
+	if len(encodingSplits) > 1 {
+		startHash, endHash := strings.Index(encodingSplits[1], ":")+1, strings.Index(encodingSplits[1], ",")
+		hash = encodingSplits[1][startHash:endHash]
+	}
 	return
 }

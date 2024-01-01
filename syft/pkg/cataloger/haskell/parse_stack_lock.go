@@ -46,7 +46,6 @@ func parseStackLock(_ file.Resolver, _ *generic.Environment, reader file.Locatio
 	}
 
 	var lockFile stackLock
-
 	if err := yaml.Unmarshal(bytes, &lockFile); err != nil {
 		log.WithFields("error", err).Tracef("failed to parse stack.yaml.lock file %q", reader.RealPath)
 		return nil, nil, nil

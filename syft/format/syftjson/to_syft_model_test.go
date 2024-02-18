@@ -2,6 +2,9 @@ package syftjson
 
 import (
 	"errors"
+	"io/fs"
+	"math"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -230,6 +233,7 @@ func Test_toSyftFiles(t *testing.T) {
 			want: sbom.Artifacts{
 				FileMetadata: map[file.Coordinates]file.Metadata{},
 				FileDigests:  map[file.Coordinates][]file.Digest{},
+				Executables:  map[file.Coordinates]file.Executable{},
 			},
 		},
 		{
@@ -245,6 +249,7 @@ func Test_toSyftFiles(t *testing.T) {
 							Value:     "123",
 						},
 					},
+					Executable: nil,
 				},
 			},
 			want: sbom.Artifacts{
@@ -257,6 +262,7 @@ func Test_toSyftFiles(t *testing.T) {
 						},
 					},
 				},
+				Executables: map[file.Coordinates]file.Executable{},
 			},
 		},
 		{
@@ -278,6 +284,20 @@ func Test_toSyftFiles(t *testing.T) {
 						{
 							Algorithm: "sha256",
 							Value:     "123",
+						},
+					},
+					Executable: &file.Executable{
+						Format: file.ELF,
+						SecurityFeatures: &file.ELFSecurityFeatures{
+							SymbolTableStripped:           false,
+							StackCanary:                   boolRef(true),
+							NoExecutable:                  false,
+							RelocationReadOnly:            "partial",
+							PositionIndependentExecutable: false,
+							DynamicSharedObject:           false,
+							LlvmSafeStack:                 boolRef(false),
+							LlvmControlFlowIntegrity:      boolRef(true),
+							ClangFortifySource:            boolRef(true),
 						},
 					},
 				},
@@ -306,6 +326,22 @@ func Test_toSyftFiles(t *testing.T) {
 						},
 					},
 				},
+				Executables: map[file.Coordinates]file.Executable{
+					coord: {
+						Format: file.ELF,
+						SecurityFeatures: &file.ELFSecurityFeatures{
+							SymbolTableStripped:           false,
+							StackCanary:                   boolRef(true),
+							NoExecutable:                  false,
+							RelocationReadOnly:            "partial",
+							PositionIndependentExecutable: false,
+							DynamicSharedObject:           false,
+							LlvmSafeStack:                 boolRef(false),
+							LlvmControlFlowIntegrity:      boolRef(true),
+							ClangFortifySource:            boolRef(true),
+						},
+					},
+				},
 			},
 		},
 	}
@@ -318,7 +354,11 @@ func Test_toSyftFiles(t *testing.T) {
 	}
 }
 
-func Test_toSyfRelationship(t *testing.T) {
+func boolRef(b bool) *bool {
+	return &b
+}
+
+func Test_toSyftRelationship(t *testing.T) {
 	packageWithId := func(id string) *pkg.Package {
 		p := &pkg.Package{}
 		p.OverrideID(artifact.ID(id))
@@ -430,6 +470,48 @@ func Test_deduplicateErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := deduplicateErrors(tt.errors)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_safeFileModeConvert(t *testing.T) {
+	tests := []struct {
+		name    string
+		val     int
+		want    fs.FileMode
+		wantErr bool
+	}{
+		{
+			// fs.go ModePerm 511 = FileMode = 0777 // Unix permission bits :192
+			name:    "valid perm",
+			val:     777,
+			want:    os.FileMode(511), // 777 in octal equals 511 in decimal
+			wantErr: false,
+		},
+		{
+			name:    "outside int32 high",
+			val:     int(math.MaxInt32) + 1,
+			want:    0,
+			wantErr: true,
+		},
+		{
+			name:    "outside int32 low",
+			val:     int(math.MinInt32) - 1,
+			want:    0,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := safeFileModeConvert(tt.val)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Equal(t, tt.want, got)
+				return
+			}
+			assert.NoError(t, err)
 			assert.Equal(t, tt.want, got)
 		})
 	}

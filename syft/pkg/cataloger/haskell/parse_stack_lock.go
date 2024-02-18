@@ -1,6 +1,7 @@
 package haskell
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -39,7 +40,7 @@ type completedSnapshot struct {
 }
 
 // parseStackLock is a parser function for stack.yaml.lock contents, returning all packages discovered.
-func parseStackLock(_ file.Resolver, _ *generic.Environment, reader file.LocationReadCloser) ([]pkg.Package, []artifact.Relationship, error) {
+func parseStackLock(_ context.Context, _ file.Resolver, _ *generic.Environment, reader file.LocationReadCloser) ([]pkg.Package, []artifact.Relationship, error) {
 	bytes, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load stack.yaml.lock file: %w", err)
@@ -82,8 +83,13 @@ func parseStackLock(_ file.Resolver, _ *generic.Environment, reader file.Locatio
 
 	return pkgs, nil, nil
 }
+
 func parseStackPackageEncoding(pkgEncoding string) (name, version, hash string) {
 	lastDashIdx := strings.LastIndex(pkgEncoding, "-")
+	if lastDashIdx == -1 {
+		name = pkgEncoding
+		return
+	}
 	name = pkgEncoding[:lastDashIdx]
 	remainingEncoding := pkgEncoding[lastDashIdx+1:]
 	encodingSplits := strings.Split(remainingEncoding, "@")

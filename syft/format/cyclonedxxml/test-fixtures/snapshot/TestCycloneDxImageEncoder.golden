@@ -3,11 +3,13 @@
   <metadata>
     <timestamp>redacted</timestamp>
     <tools>
-      <tool>
-        <vendor>anchore</vendor>
-        <name>syft</name>
-        <version>v0.42.0-bogus</version>
-      </tool>
+      <components>
+        <component type="application">
+          <author>anchore</author>
+          <name>syft</name>
+          <version>v0.42.0-bogus</version>
+        </component>
+      </components>
     </tools>
     <component bom-ref="redacted" type="container">
       <name>user-image-input</name>
@@ -48,7 +50,7 @@
         <property name="syft:metadata:installedSize">0</property>
       </properties>
     </component>
-    <component type="operating-system">
+    <component bom-ref="redacted" type="operating-system">
       <name>debian</name>
       <version>1.2.3</version>
       <description>debian</description>

@@ -37,8 +37,8 @@ func GenerateSBOM(ctx context.Context, id clio.Identification, src source.Source
 	return commands.GenerateSBOM(ctx, id, src, opts)
 }
 
-func LibPackagesExec(ctx context.Context, id clio.Identification, opts *ScanOptions, userInput string, l logger.Logger, enable_log bool) (*sbom.SBOM, error) {
-	if enable_log {
+func LibPackagesExec(ctx context.Context, id clio.Identification, opts *ScanOptions, userInput string, l logger.Logger, enableLog bool) (*sbom.SBOM, error) {
+	if enableLog {
 		LibInitLoggingConfig(l)
 	}
 

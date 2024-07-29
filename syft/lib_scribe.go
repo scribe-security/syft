@@ -7,27 +7,24 @@ import (
 	"os"
 	"strings"
 
-	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/syft/source"
 )
 
 // GetSource uses all of Syft's known source providers to attempt to resolve the user input to a usable source.Source
-func GetSource(ctx context.Context, userInput string, cfg *GetSourceConfig) (source.Source, error) {
+func GetSourceWithProviderName(ctx context.Context, userInput string, cfg *GetSourceConfig) (source.Source, string, error) {
 	if cfg == nil {
 		cfg = DefaultGetSourceConfig()
 	}
 
 	providers, err := cfg.getProviders(userInput)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	log.Debug("######### GetSource", providers)
 	var errs []error
 	var fileNotFoundProviders []string
 
 	// call each source provider until we find a valid source
 	for _, p := range providers {
-		log.Debug("######### GetSource 2", p, p.Name())
 		src, err := p.Provide(ctx)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
@@ -43,29 +40,15 @@ func GetSource(ctx context.Context, userInput string, cfg *GetSourceConfig) (sou
 				switch meta.(type) {
 				case *source.ImageMetadata, source.ImageMetadata:
 				default:
-					return src, fmt.Errorf("platform specified with non-image source")
+					return src, "", fmt.Errorf("platform specified with non-image source")
 				}
 			}
-			return src, nil
+			return src, p.Name(), nil
 		}
 	}
 
 	if len(fileNotFoundProviders) > 0 {
 		errs = append(errs, fmt.Errorf("additionally, the following providers failed with %w: %s", os.ErrNotExist, strings.Join(fileNotFoundProviders, ", ")))
 	}
-	return nil, sourceError(userInput, errs...)
-}
-
-func sourceError(userInput string, errs ...error) error {
-	switch len(errs) {
-	case 0:
-		return nil
-	case 1:
-		return fmt.Errorf("an error occurred attempting to resolve '%s': %w", userInput, errs[0])
-	}
-	errorTexts := ""
-	for _, e := range errs {
-		errorTexts += fmt.Sprintf("\n  - %s", e)
-	}
-	return fmt.Errorf("errors occurred attempting to resolve '%s':%s", userInput, errorTexts)
+	return nil, "", sourceError(userInput, errs...)
 }

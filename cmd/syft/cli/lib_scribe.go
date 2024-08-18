@@ -54,6 +54,9 @@ func LibPackagesExec(ctx context.Context, id clio.Identification, opts *ScanOpti
 		}
 	}()
 
+	if src == nil {
+		return nil, "", fmt.Errorf("no source available for %q", userInput)
+	}
 	s, err := commands.GenerateSBOM(ctx, id, src, &opts.Catalog)
 	if err != nil {
 		return nil, "", err

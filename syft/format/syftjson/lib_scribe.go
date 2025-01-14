@@ -1,0 +1,16 @@
+package syftjson
+
+import (
+	"github.com/anchore/syft/syft/format/syftjson/model"
+	"github.com/anchore/syft/syft/pkg"
+	"github.com/anchore/syft/syft/source"
+)
+
+func ToSourceModel(src source.Description) model.Source {
+	return toSourceModel(src)
+}
+
+func ToSyftPackage(p model.Package) pkg.Package {
+	m := make(map[string]string)
+	return toSyftPackage(p, m)
+}

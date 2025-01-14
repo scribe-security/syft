@@ -15,7 +15,7 @@ jobs:
     environment: release
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4.1.7
+      - uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938 #v4.2.0
 
       - name: Check if running on main
         if: github.ref != 'refs/heads/main'
@@ -105,7 +105,7 @@ jobs:
       # required for goreleaser signs section with cosign
       id-token: write
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4.1.7
+      - uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938 #v4.2.0
         with:
           fetch-depth: 0
 
@@ -148,7 +148,7 @@ jobs:
           # for updating brew formula in anchore/homebrew-syft
           GITHUB_BREW_TOKEN: ${{ secrets.ANCHOREOPS_GITHUB_OSS_WRITE_TOKEN }}
 
-      - uses: anchore/sbom-action@d94f46e13c6c62f59525ac9a1e147a99dc0b9bf5 #v0.17.0
+      - uses: anchore/sbom-action@61119d458adab75f756bc0b9e4bde25725f86a7a #v0.17.2
         continue-on-error: true
         with:
           artifact-name: sbom.spdx.json

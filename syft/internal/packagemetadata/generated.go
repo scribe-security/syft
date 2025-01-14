@@ -27,6 +27,7 @@ func AllTypes() []any {
 		pkg.HackageStackYamlEntry{},
 		pkg.HackageStackYamlLockEntry{},
 		pkg.JavaArchive{},
+		pkg.JavaVMInstallation{},
 		pkg.LinuxKernel{},
 		pkg.LinuxKernelModule{},
 		pkg.LuaRocksPackage{},
@@ -34,6 +35,7 @@ func AllTypes() []any {
 		pkg.NixStoreEntry{},
 		pkg.NpmPackage{},
 		pkg.NpmPackageLockEntry{},
+		pkg.OpamPackage{},
 		pkg.PhpComposerInstalledEntry{},
 		pkg.PhpComposerLockEntry{},
 		pkg.PhpPeclEntry{},
@@ -49,6 +51,7 @@ func AllTypes() []any {
 		pkg.RustBinaryAuditEntry{},
 		pkg.RustCargoLockEntry{},
 		pkg.SwiftPackageManagerResolvedEntry{},
+		pkg.SwiplPackEntry{},
 		pkg.WordpressPluginEntry{},
 		pkg.YarnLockEntry{},
 	}

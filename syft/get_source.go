@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/syft/source"
 )
 
@@ -20,12 +21,13 @@ func GetSource(ctx context.Context, userInput string, cfg *GetSourceConfig) (sou
 	if err != nil {
 		return nil, err
 	}
-
+	log.Debug("######### GetSource", providers)
 	var errs []error
 	var fileNotFoundProviders []string
 
 	// call each source provider until we find a valid source
 	for _, p := range providers {
+		log.Debug("######### GetSource 2", p, p.Name())
 		src, err := p.Provide(ctx)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {

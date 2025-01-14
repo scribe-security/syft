@@ -389,6 +389,14 @@ var dirOnlyTestCases = []testCase{
 		},
 	},
 	{
+		name:        "find swipl pack package manager packages",
+		pkgType:     pkg.SwiplPackPkg,
+		pkgLanguage: pkg.Swipl,
+		pkgInfo: map[string]string{
+			"hdt": "0.5.2",
+		},
+	},
+	{
 		name:    "find github action packages (from usage in workflow files and composite actions)",
 		pkgType: pkg.GithubActionPkg,
 		pkgInfo: map[string]string{
@@ -400,6 +408,14 @@ var dirOnlyTestCases = []testCase{
 		pkgType: pkg.GithubActionWorkflowPkg,
 		pkgInfo: map[string]string{
 			"octo-org/this-repo/.github/workflows/workflow-1.yml": "172239021f7ba04fe7327647b213799853a9eb89",
+		},
+	},
+	{
+		name:        "find opam package",
+		pkgType:     pkg.OpamPkg,
+		pkgLanguage: pkg.OCaml,
+		pkgInfo: map[string]string{
+			"ocaml-base-compiler": "4.14.0",
 		},
 	},
 }

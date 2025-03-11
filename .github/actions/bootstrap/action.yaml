@@ -5,7 +5,7 @@ inputs:
   go-version:
     description: "Go version to install"
     required: true
-    default: "1.23.x"
+    default: "1.24.x"
   go-dependencies:
     description: "Download go dependencies"
     required: true
@@ -29,7 +29,7 @@ runs:
   using: "composite"
   steps:
     # note: go mod and build is automatically cached on default with v4+
-    - uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
+    - uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
       if: inputs.go-version != ''
       with:
         go-version: ${{ inputs.go-version }}
@@ -37,7 +37,7 @@ runs:
     - name: Restore tool cache
       if: inputs.tools == 'true'
       id: tool-cache
-      uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
+      uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
       with:
         path: ${{ github.workspace }}/.tool
         key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-tool-${{ hashFiles('.binny.yaml') }}
@@ -60,7 +60,7 @@ runs:
 
     - name: Restore ORAS cache from github actions
       if: inputs.download-test-fixture-cache == 'true'
-      uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
+      uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
       with:
         path: ${{ github.workspace }}/.tmp/oras-cache
         key: ${{ inputs.cache-key-prefix }}-oras-cache

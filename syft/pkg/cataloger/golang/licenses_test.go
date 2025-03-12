@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/licensecheck"
 	"github.com/stretchr/testify/require"
 
 	"github.com/anchore/syft/internal/licenses"
@@ -68,7 +69,14 @@ func Test_LicenseSearch(t *testing.T) {
 	wd, err := os.Getwd()
 	require.NoError(t, err)
 
-	licenseScanner := licenses.TestingOnlyScanner()
+	localVendorDir := filepath.Join(wd, "test-fixtures", "licenses-vendor")
+
+	sc := &licenses.ScannerConfig{
+		CoverageThreshold: 75,
+		Scanner:           licensecheck.Scan,
+	}
+	licenseScanner, err := licenses.NewScanner(sc)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name     string
@@ -168,6 +176,51 @@ func Test_LicenseSearch(t *testing.T) {
 				Locations:      file.NewLocationSet(),
 			}},
 		},
+		{
+			name:    "github.com/someorg/somename",
+			version: "v0.3.2",
+			config: CatalogerConfig{
+				SearchLocalVendorLicenses: true,
+				LocalVendorDir:            localVendorDir,
+			},
+			expected: []pkg.License{{
+				Value:          "Apache-2.0",
+				SPDXExpression: "Apache-2.0",
+				Type:           license.Concluded,
+				URLs:           []string{"file://$GO_VENDOR/github.com/someorg/somename/LICENSE"},
+				Locations:      file.NewLocationSet(),
+			}},
+		},
+		{
+			name:    "github.com/CapORG/CapProject",
+			version: "v4.111.5",
+			config: CatalogerConfig{
+				SearchLocalVendorLicenses: true,
+				LocalVendorDir:            localVendorDir,
+			},
+			expected: []pkg.License{{
+				Value:          "MIT",
+				SPDXExpression: "MIT",
+				Type:           license.Concluded,
+				URLs:           []string{"file://$GO_VENDOR/github.com/!cap!o!r!g/!cap!project/LICENSE.txt"},
+				Locations:      file.NewLocationSet(),
+			}},
+		},
+		{
+			name:    "github.com/someorg/strangelicense",
+			version: "v1.2.3",
+			config: CatalogerConfig{
+				SearchLocalVendorLicenses: true,
+				LocalVendorDir:            localVendorDir,
+			},
+			expected: []pkg.License{{
+				Value:          "Apache-2.0",
+				SPDXExpression: "Apache-2.0",
+				Type:           license.Concluded,
+				URLs:           []string{"file://$GO_VENDOR/github.com/someorg/strangelicense/LiCeNsE.tXt"},
+				Locations:      file.NewLocationSet(),
+			}},
+		},
 	}
 
 	for _, test := range tests {
@@ -248,7 +301,10 @@ func Test_findVersionPath(t *testing.T) {
 
 func Test_walkDirErrors(t *testing.T) {
 	resolver := newGoLicenseResolver("", CatalogerConfig{})
-	_, err := resolver.findLicensesInFS(context.Background(), licenses.TestingOnlyScanner(), "somewhere", badFS{})
+	sc := &licenses.ScannerConfig{Scanner: licensecheck.Scan, CoverageThreshold: 75}
+	scanner, err := licenses.NewScanner(sc)
+	require.NoError(t, err)
+	_, err = resolver.findLicensesInFS(context.Background(), scanner, "somewhere", badFS{})
 	require.Error(t, err)
 }
 
@@ -266,8 +322,9 @@ func Test_noLocalGoModDir(t *testing.T) {
 	validTmp := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(validTmp, "mod@ver"), 0700|os.ModeDir))
 
-	licenseScanner := licenses.TestingOnlyScanner()
-
+	sc := &licenses.ScannerConfig{Scanner: licensecheck.Scan, CoverageThreshold: 75}
+	licenseScanner, err := licenses.NewScanner(sc)
+	require.NoError(t, err)
 	tests := []struct {
 		name    string
 		dir     string
@@ -305,4 +362,31 @@ func Test_noLocalGoModDir(t *testing.T) {
 			test.wantErr(t, err)
 		})
 	}
+}
+
+func TestLicenseConversion(t *testing.T) {
+	inputLicenses := []pkg.License{
+		{
+			Value:          "Apache-2.0",
+			SPDXExpression: "Apache-2.0",
+			Type:           "concluded",
+			URLs:           nil,
+			Locations:      file.NewLocationSet(file.NewLocation("LICENSE")),
+			Contents:       "",
+		},
+		{
+			Value:          "UNKNOWN",
+			SPDXExpression: "UNKNOWN_4d1cffe420916f2b706300ab63fcafaf35226a0ad3725cb9f95b26036cefae32",
+			Type:           "declared",
+			URLs:           nil,
+			Locations:      file.NewLocationSet(file.NewLocation("LICENSE2")),
+			Contents:       "NVIDIA Software License Agreement and CUDA Supplement to Software License Agreement",
+		},
+	}
+
+	goLicenses := toGoLicenses(inputLicenses)
+
+	result := toPkgLicenses(goLicenses)
+
+	require.Equal(t, inputLicenses, result)
 }

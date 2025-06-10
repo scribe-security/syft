@@ -16,6 +16,7 @@ import (
 	"github.com/anchore/syft/syft/artifact"
 	"github.com/anchore/syft/syft/cpe"
 	"github.com/anchore/syft/syft/file"
+	"github.com/anchore/syft/syft/format/internal"
 	"github.com/anchore/syft/syft/format/syftjson/model"
 	"github.com/anchore/syft/syft/linux"
 	"github.com/anchore/syft/syft/pkg"
@@ -351,9 +352,9 @@ func toSyftPackage(p model.Package, idAliases map[string]string) pkg.Package {
 		Metadata:  p.Metadata,
 	}
 
-	// we don't know if this package ID is truly unique, however, we need to trust the user input in case there are
-	// external references to it. That is, we can't derive our own ID (using pkg.SetID()) since consumers won't
-	// be able to historically interact with data that references the IDs from the original SBOM document being decoded now.
+	internal.Backfill(&out)
+
+	// always prefer the IDs from the SBOM over derived IDs
 	out.OverrideID(artifact.ID(p.ID))
 
 	// this alias mapping is currently defunct, but could be useful in the future.

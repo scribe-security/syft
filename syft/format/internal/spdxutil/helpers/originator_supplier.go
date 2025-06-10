@@ -50,6 +50,14 @@ func Originator(p pkg.Package) (typ string, author string) { //nolint: gocyclo,f
 	case pkg.DotnetPortableExecutableEntry:
 		typ = orgType
 		author = metadata.CompanyName
+	case pkg.PEBinary:
+		// this is a known common keyword used in version resources
+		// for more info see: https://learn.microsoft.com/en-us/windows/win32/menurc/versioninfo-resource
+		val, ok := metadata.VersionResources.Get("CompanyName")
+		if ok {
+			typ = orgType
+			author = val
+		}
 
 	case pkg.DpkgDBEntry:
 		author = metadata.Maintainer
@@ -127,6 +135,7 @@ func Originator(p pkg.Package) (typ string, author string) { //nolint: gocyclo,f
 		// it seems that the vast majority of the time the author is an org, not a person
 		typ = orgType
 		author = metadata.Author
+
 	case pkg.SwiplPackEntry:
 		author = formatPersonOrOrg(metadata.Author, metadata.AuthorEmail)
 	}

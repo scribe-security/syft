@@ -110,7 +110,7 @@ func (o *scanOptions) PostLoad() error {
 }
 
 func (o *scanOptions) validateLegacyOptionsNotUsed() error {
-	if len(fangs.Flatten(o.Config.ConfigFile)) == 0 {
+	if len(fangs.Flatten(o.ConfigFile)) == 0 {
 		return nil
 	}
 
@@ -122,7 +122,7 @@ func (o *scanOptions) validateLegacyOptionsNotUsed() error {
 		File                            any     `yaml:"file" json:"file" mapstructure:"file"`
 	}
 
-	for _, f := range fangs.Flatten(o.Config.ConfigFile) {
+	for _, f := range fangs.Flatten(o.ConfigFile) {
 		by, err := os.ReadFile(f)
 		if err != nil {
 			return fmt.Errorf("unable to read config file during validations %q: %w", f, err)
@@ -173,18 +173,15 @@ func runScan(ctx context.Context, id clio.Identification, opts *scanOptions, use
 	if err != nil {
 		return err
 	}
-	log.Debug("######## runScan")
 	sources := opts.From
 	if len(sources) == 0 {
 		// extract a scheme if it matches any provider tag; this is a holdover for compatibility, using the --from flag is recommended
 		explicitSource, newUserInput := stereoscope.ExtractSchemeSource(userInput, allSourceProviderTags()...)
-		log.Debug("########### explicitSource", explicitSource)
 		if explicitSource != "" {
 			sources = append(sources, explicitSource)
 			userInput = newUserInput
 		}
 	}
-	log.Debug("#############, explicitSource", sources)
 
 	src, err := getSource(ctx, &opts.Catalog, userInput, sources...)
 

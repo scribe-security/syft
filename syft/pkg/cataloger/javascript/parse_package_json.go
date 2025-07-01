@@ -8,7 +8,7 @@ import (
 	"io"
 	"regexp"
 
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 
 	"github.com/anchore/syft/internal"
 	"github.com/anchore/syft/syft/artifact"
@@ -51,7 +51,7 @@ type repository struct {
 var authorPattern = regexp.MustCompile(`^\s*(?P<name>[^<(]*)(\s+<(?P<email>.*)>)?(\s\((?P<url>.*)\))?\s*$`)
 
 // parsePackageJSON parses a package.json and returns the discovered JavaScript packages.
-func parsePackageJSON(_ context.Context, _ file.Resolver, _ *generic.Environment, reader file.LocationReadCloser) ([]pkg.Package, []artifact.Relationship, error) {
+func parsePackageJSON(ctx context.Context, _ file.Resolver, _ *generic.Environment, reader file.LocationReadCloser) ([]pkg.Package, []artifact.Relationship, error) {
 	var pkgs []pkg.Package
 	dec := json.NewDecoder(reader)
 
@@ -67,7 +67,7 @@ func parsePackageJSON(_ context.Context, _ file.Resolver, _ *generic.Environment
 		// a compliance filter later will remove these packages based on compliance rules
 		pkgs = append(
 			pkgs,
-			newPackageJSONPackage(p, reader.Location.WithAnnotation(pkg.EvidenceAnnotationKey, pkg.PrimaryEvidenceAnnotation)),
+			newPackageJSONPackage(ctx, p, reader.WithAnnotation(pkg.EvidenceAnnotationKey, pkg.PrimaryEvidenceAnnotation)),
 		)
 	}
 

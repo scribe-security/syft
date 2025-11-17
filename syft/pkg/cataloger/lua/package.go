@@ -1,13 +1,20 @@
 package lua
 
 import (
+	"context"
+	"path"
+
 	"github.com/anchore/packageurl-go"
 	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/pkg"
+	"github.com/anchore/syft/syft/pkg/cataloger/internal/licenses"
 )
 
-func newLuaRocksPackage(u luaRocksPackage, indexLocation file.Location) pkg.Package {
-	license := pkg.NewLicensesFromLocation(indexLocation, u.License)
+func newLuaRocksPackage(ctx context.Context, resolver file.Resolver, u luaRocksPackage, indexLocation file.Location) pkg.Package {
+	license := pkg.NewLicensesFromLocationWithContext(ctx, indexLocation, u.License)
+	if len(license) == 0 {
+		license = licenses.FindInDirs(ctx, resolver, path.Dir(indexLocation.Path()))
+	}
 	p := pkg.Package{
 		Name:      u.Name,
 		Version:   u.Version,

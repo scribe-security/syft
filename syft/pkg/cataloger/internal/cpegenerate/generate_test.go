@@ -309,6 +309,23 @@ func TestGeneratePackageCPEs(t *testing.T) {
 			},
 		},
 		{
+			name: "rpm archive vendor selection",
+			p: pkg.Package{
+				Name:    "name",
+				Version: "3.2",
+				FoundBy: "some-analyzer",
+				Type:    pkg.RpmPkg,
+				Metadata: pkg.RpmArchive{
+					Vendor: "some-vendor",
+				},
+			},
+			expected: []string{
+				"cpe:2.3:a:name:name:3.2:*:*:*:*:*:*:*",
+				"cpe:2.3:a:some-vendor:name:3.2:*:*:*:*:*:*:*",
+				"cpe:2.3:a:some_vendor:name:3.2:*:*:*:*:*:*:*",
+			},
+		},
+		{
 			name: "rpm vendor selection",
 			p: pkg.Package{
 				Name:    "name",
@@ -760,6 +777,75 @@ func TestGeneratePackageCPEs(t *testing.T) {
 				"cpe:2.3:a:wow_estore:wp_coder:2.5.1:*:*:*:*:wordpress:*:*",
 			},
 		},
+		{
+			name: "dotnet deps.json",
+			p: pkg.Package{
+				Name:    "Something",
+				Version: "2.5.1",
+				Type:    pkg.DotnetPkg,
+				Metadata: pkg.DotnetDepsEntry{
+					Name: "Something-Else",
+
+					Executables: map[string]pkg.DotnetPortableExecutableEntry{
+						"1": {
+							AssemblyVersion: "assembly-version!",
+							LegalCopyright:  "copyright!",
+							Comments:        "comments!",
+							InternalName:    "internal!",
+							CompanyName:     "company!",
+							ProductName:     "product!",
+							ProductVersion:  "version!",
+						},
+					},
+				},
+			},
+			expected: []string{
+				"cpe:2.3:a:company\\!:product\\!:2.5.1:*:*:*:*:*:*:*",
+				"cpe:2.3:a:company\\!:product\\!_.net:2.5.1:*:*:*:*:*:*:*",
+				"cpe:2.3:a:company\\!:something_else:2.5.1:*:*:*:*:*:*:*",
+				"cpe:2.3:a:company\\!:something_else_.net:2.5.1:*:*:*:*:*:*:*",
+				"cpe:2.3:a:something_else:product\\!:2.5.1:*:*:*:*:*:*:*",
+				"cpe:2.3:a:something_else:product\\!_.net:2.5.1:*:*:*:*:*:*:*",
+				"cpe:2.3:a:something_else:something_else:2.5.1:*:*:*:*:*:*:*",
+				"cpe:2.3:a:something_else:something_else_.net:2.5.1:*:*:*:*:*:*:*",
+			},
+		},
+		{
+			name: "dotnet executable",
+			p: pkg.Package{
+				Name:    "Something",
+				Version: "2.5.1",
+				Type:    pkg.DotnetPkg,
+				Metadata: pkg.DotnetPortableExecutableEntry{
+					AssemblyVersion: "assembly-version!",
+					LegalCopyright:  "copyright!",
+					Comments:        "comments!",
+					InternalName:    "internal!",
+					CompanyName:     "company!",
+					ProductName:     "product!",
+					ProductVersion:  "version!",
+				},
+			},
+			expected: []string{
+				"cpe:2.3:a:company\\!:product\\!:2.5.1:*:*:*:*:*:*:*",
+				"cpe:2.3:a:company\\!:product\\!_.net:2.5.1:*:*:*:*:*:*:*",
+			},
+		},
+		{
+			name: "dotnet package.lock",
+			p: pkg.Package{
+				Name:    "Something",
+				Version: "2.5.1",
+				Type:    pkg.DotnetPkg,
+				Metadata: pkg.DotnetPackagesLockEntry{
+					Name: "Something-Else",
+				},
+			},
+			expected: []string{
+				"cpe:2.3:a:something_else:something_else:2.5.1:*:*:*:*:*:*:*",
+				"cpe:2.3:a:something_else:something_else_.net:2.5.1:*:*:*:*:*:*:*",
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -937,12 +1023,12 @@ func TestCandidateVendor(t *testing.T) {
 				Name: "Django",
 				Type: pkg.PythonPkg,
 			},
-			expected: []string{"djangoproject" /* <-- known good names | default guess --> */, "Django"},
+			expected: []string{"djangoproject", "python-Django", "python_Django" /* <-- known good names | default guess --> */, "python", "Django"},
 		},
 	}
 
 	for _, test := range tests {
-		t.Run(fmt.Sprintf("%+v %+v", test.p, test.expected), func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			assert.ElementsMatch(t, test.expected, candidateVendors(test.p))
 		})
 	}
@@ -1056,6 +1142,70 @@ func TestDictionaryFindIsWired(t *testing.T) {
 			got, gotExists := FromDictionaryFind(tt.pkg)
 			assert.ElementsMatch(t, tt.want, got)
 			assert.Equal(t, tt.wantExists, gotExists)
+		})
+	}
+}
+
+// TestAddBinaryPackageDigitVariations tests the heuristic for binary package types
+// where names ending with digits get variations with all suffix-digits removed (e.g. Qt5 -> Qt).
+// This improves vulnerability matching for binary packages like Qt6, libfoo123, etc.
+func TestAddBinaryPackageDigitVariations(t *testing.T) {
+	tests := []struct {
+		name            string
+		packageType     pkg.Type
+		inputCandidates []string
+		expectedPresent []string // These should be present in the result
+		expectedAbsent  []string // These should NOT be present in the result
+	}{
+		{
+			name:            "Qt5 binary package example",
+			packageType:     pkg.BinaryPkg,
+			inputCandidates: []string{"Qt5"},
+			expectedPresent: []string{"Qt5", "Qt"},
+			expectedAbsent:  []string{},
+		},
+		{
+			name:            "package with trailing digits",
+			packageType:     pkg.BinaryPkg,
+			inputCandidates: []string{"Qt5", "libfoo123", "bar42", "baz"},
+			expectedPresent: []string{"Qt5", "Qt", "libfoo123", "libfoo", "bar42", "bar", "baz"},
+			expectedAbsent:  []string{},
+		},
+		{
+			name:            "multiple trailing digits",
+			inputCandidates: []string{"Qt872", "package999"},
+			expectedPresent: []string{"Qt872", "Qt", "package999", "package"},
+			expectedAbsent:  []string{},
+		},
+		{
+			name:            "package without trailing digits",
+			inputCandidates: []string{"QtCore", "libfoo", "bar"},
+			expectedPresent: []string{"QtCore", "libfoo", "bar"},
+			expectedAbsent:  []string{"QtCor", "libfo", "ba"},
+		},
+		{
+			name:            "empty candidate set",
+			packageType:     pkg.BinaryPkg,
+			inputCandidates: []string{},
+			expectedPresent: []string{},
+			expectedAbsent:  []string{},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fields := newFieldCandidateSet(test.inputCandidates...)
+			addBinaryPackageDigitVariations(fields)
+
+			values := fields.uniqueValues()
+
+			for _, expected := range test.expectedPresent {
+				assert.Contains(t, values, expected, "expected %q to be present", expected)
+			}
+
+			for _, notExpected := range test.expectedAbsent {
+				assert.NotContains(t, values, notExpected, "expected %q to be absent", notExpected)
+			}
 		})
 	}
 }

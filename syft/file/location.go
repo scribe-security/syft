@@ -9,6 +9,17 @@ import (
 	"github.com/anchore/stereoscope/pkg/image"
 )
 
+const (
+	// VisibleAnnotationKey is the key used to indicate if the location is visible or not at runtime
+	VisibleAnnotationKey = "visible"
+
+	// HiddenAnnotation is the value used to indicate that the location is not visible at runtime because it was deleted
+	HiddenAnnotation = "false"
+
+	// VisibleAnnotation is the value used to indicate that the location is visible at runtime
+	VisibleAnnotation = "true"
+)
+
 // Location represents a path relative to a particular filesystem resolved to a specific file.Reference. This struct is used as a key
 // in content fetching to uniquely identify a file relative to a request (the AccessPath).
 type Location struct {
@@ -16,18 +27,24 @@ type Location struct {
 	LocationMetadata `cyclonedx:""`
 }
 
+// LocationData contains the core identifying information for a file location.
 type LocationData struct {
 	Coordinates `cyclonedx:""` // Empty string here means there is no intermediate property name, e.g. syft:locations:0:path without "coordinates"
 	// note: it is IMPORTANT to ignore anything but the coordinates for a Location when considering the ID (hash value)
 	// since the coordinates are the minimally correct ID for a location (symlinks should not come into play)
-	AccessPath string         `hash:"ignore" json:"accessPath"` // The path to the file which may or may not have hardlinks / symlinks
-	ref        file.Reference `hash:"ignore"`                   // The file reference relative to the stereoscope.FileCatalog that has more information about this location.
+
+	// AccessPath is the path used to retrieve file contents (which may or may not have hardlinks / symlinks in the path)
+	AccessPath string `hash:"ignore" json:"accessPath"`
+
+	// ref is the stereoscope file reference relative to the stereoscope.FileCatalog that has more information about this location.
+	ref file.Reference `hash:"ignore"`
 }
 
 func (l LocationData) Reference() file.Reference {
 	return l.ref
 }
 
+// LocationMetadata provides additional contextual information about a file location.
 type LocationMetadata struct {
 	Annotations map[string]string `json:"annotations,omitempty"` // Arbitrary key-value pairs that can be used to annotate a location
 }
@@ -48,15 +65,18 @@ func (m *LocationMetadata) merge(other LocationMetadata) error {
 }
 
 func (l Location) WithAnnotation(key, value string) Location {
-	if l.LocationMetadata.Annotations == nil {
-		l.LocationMetadata.Annotations = map[string]string{}
+	if key == "" || value == "" {
+		return l
 	}
-	l.LocationMetadata.Annotations[key] = value
+	if l.Annotations == nil {
+		l.Annotations = map[string]string{}
+	}
+	l.Annotations[key] = value
 	return l
 }
 
 func (l Location) WithoutAnnotations() Location {
-	l.LocationMetadata.Annotations = map[string]string{}
+	l.Annotations = map[string]string{}
 
 	return l
 }

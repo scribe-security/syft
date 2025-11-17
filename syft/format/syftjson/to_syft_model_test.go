@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	stereoFile "github.com/anchore/stereoscope/pkg/file"
+	"github.com/anchore/syft/internal/sourcemetadata"
 	"github.com/anchore/syft/syft/artifact"
 	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/format/syftjson/model"
-	"github.com/anchore/syft/syft/internal/sourcemetadata"
 	"github.com/anchore/syft/syft/pkg"
 	"github.com/anchore/syft/syft/sbom"
 	"github.com/anchore/syft/syft/source"
@@ -97,6 +97,36 @@ func Test_toSyftSourceData(t *testing.T) {
 					ID:             "id...",
 					ManifestDigest: "digest...",
 					MediaType:      "type...",
+				},
+			},
+		},
+		{
+			name: "snap",
+			src: model.Source{
+				ID:      "the-id",
+				Name:    "some-name",
+				Version: "some-version",
+				Type:    "snap",
+				Metadata: source.SnapMetadata{
+					Summary:       "something!",
+					Base:          "base!",
+					Grade:         "grade!",
+					Confinement:   "confined!",
+					Architectures: []string{"arch!"},
+					Digests:       []file.Digest{{Algorithm: "sha256", Value: "some-digest!"}},
+				},
+			},
+			expected: &source.Description{
+				ID:      "the-id",
+				Name:    "some-name",
+				Version: "some-version",
+				Metadata: source.SnapMetadata{
+					Summary:       "something!",
+					Base:          "base!",
+					Grade:         "grade!",
+					Confinement:   "confined!",
+					Architectures: []string{"arch!"},
+					Digests:       []file.Digest{{Algorithm: "sha256", Value: "some-digest!"}},
 				},
 			},
 		},
@@ -234,6 +264,7 @@ func Test_toSyftFiles(t *testing.T) {
 				FileMetadata: map[file.Coordinates]file.Metadata{},
 				FileDigests:  map[file.Coordinates][]file.Digest{},
 				Executables:  map[file.Coordinates]file.Executable{},
+				Unknowns:     make(map[file.Coordinates][]string),
 			},
 		},
 		{
@@ -349,6 +380,7 @@ func Test_toSyftFiles(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.want.FileContents = make(map[file.Coordinates]string)
 			tt.want.FileLicenses = make(map[file.Coordinates][]file.License)
+			tt.want.Unknowns = make(map[file.Coordinates][]string)
 			assert.Equal(t, tt.want, toSyftFiles(tt.files))
 		})
 	}
@@ -487,6 +519,12 @@ func Test_safeFileModeConvert(t *testing.T) {
 			name:    "valid perm",
 			val:     777,
 			want:    os.FileMode(511), // 777 in octal equals 511 in decimal
+			wantErr: false,
+		},
+		{
+			name:    "valid perm with symlink type",
+			val:     1000000777,                // symlink + rwxrwxrwx
+			want:    os.FileMode(0o1000000777), // 134218239
 			wantErr: false,
 		},
 		{

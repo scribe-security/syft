@@ -18,17 +18,19 @@ import (
 	"github.com/scylladb/go-set/strset"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vifraa/gopom"
 
 	"github.com/anchore/syft/syft/artifact"
 	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/license"
 	"github.com/anchore/syft/syft/pkg"
 	"github.com/anchore/syft/syft/pkg/cataloger/internal/pkgtest"
+	"github.com/anchore/syft/syft/pkg/cataloger/java/internal/maven"
+	maventest "github.com/anchore/syft/syft/pkg/cataloger/java/internal/maven/test"
 )
 
 func TestSearchMavenForLicenses(t *testing.T) {
-	url := mockMavenRepo(t)
+	url := maventest.MockRepo(t, "internal/maven/test-fixtures/maven-repo")
+	ctx := pkgtest.Context()
 
 	tests := []struct {
 		name             string
@@ -70,31 +72,37 @@ func TestSearchMavenForLicenses(t *testing.T) {
 			require.NoError(t, err)
 
 			// setup parser
-			ap, cleanupFn, err := newJavaArchiveParser(
+			ap, cleanupFn, err := newJavaArchiveParser(context.Background(),
 				file.LocationReadCloser{
 					Location:   file.NewLocation(fixture.Name()),
 					ReadCloser: fixture,
 				}, tc.detectNested, tc.config)
 			defer cleanupFn()
+			require.NoError(t, err)
 
 			// assert licenses are discovered from upstream
 			_, _, _, parsedPom := ap.discoverMainPackageFromPomInfo(context.Background())
-			licenses, _ := ap.maven.resolveLicenses(context.Background(), parsedPom.project)
-			assert.Equal(t, tc.expectedLicenses, toPkgLicenses(nil, licenses))
+			require.NotNil(t, parsedPom, "expected to find pom information in the fixture")
+			require.NotNil(t, parsedPom.project, "expected parsedPom to have a project")
+			resolvedLicenses, _ := ap.maven.ResolveLicenses(context.Background(), parsedPom.project)
+			assert.Equal(t, tc.expectedLicenses, toPkgLicenses(ctx, nil, resolvedLicenses))
 		})
 	}
 }
 
 func TestParseJar(t *testing.T) {
+	ctx := pkgtest.Context()
 	tests := []struct {
 		name         string
 		fixture      string
 		expected     map[string]pkg.Package
 		ignoreExtras []string
+		wantErr      require.ErrorAssertionFunc
 	}{
 		{
 			name:    "example-jenkins-plugin",
 			fixture: "test-fixtures/java-builds/packages/example-jenkins-plugin.hpi",
+			wantErr: require.Error, // there are nested jars, which are not scanned and result in unknown errors
 			ignoreExtras: []string{
 				"Plugin-Version", // has dynamic date
 				"Built-By",       // podman returns the real UID
@@ -106,7 +114,7 @@ func TestParseJar(t *testing.T) {
 					Version: "1.0-SNAPSHOT",
 					PURL:    "pkg:maven/io.jenkins.plugins/example-jenkins-plugin@1.0-SNAPSHOT",
 					Licenses: pkg.NewLicenseSet(
-						pkg.NewLicenseFromLocations("MIT License", file.NewLocation("test-fixtures/java-builds/packages/example-jenkins-plugin.hpi")),
+						pkg.NewLicenseFromLocationsWithContext(ctx, "MIT License", file.NewLocation("test-fixtures/java-builds/packages/example-jenkins-plugin.hpi")),
 					),
 					Language: pkg.Java,
 					Type:     pkg.JenkinsPluginPkg,
@@ -142,9 +150,22 @@ func TestParseJar(t *testing.T) {
 						},
 						PomProperties: &pkg.JavaPomProperties{
 							Path:       "META-INF/maven/io.jenkins.plugins/example-jenkins-plugin/pom.properties",
+							Name:       "",
 							GroupID:    "io.jenkins.plugins",
 							ArtifactID: "example-jenkins-plugin",
 							Version:    "1.0-SNAPSHOT",
+						},
+						PomProject: &pkg.JavaPomProject{
+							Path:       "META-INF/maven/io.jenkins.plugins/example-jenkins-plugin/pom.xml",
+							Name:       "Example Jenkins Plugin",
+							GroupID:    "io.jenkins.plugins",
+							ArtifactID: "example-jenkins-plugin",
+							Version:    "1.0-SNAPSHOT",
+							Parent: &pkg.JavaPomParent{
+								GroupID:    "org.jenkins-ci.plugins",
+								ArtifactID: "plugin",
+								Version:    "4.46",
+							},
 						},
 					},
 				},
@@ -153,6 +174,7 @@ func TestParseJar(t *testing.T) {
 		{
 			name:    "example-java-app-gradle",
 			fixture: "test-fixtures/java-builds/packages/example-java-app-gradle-0.1.0.jar",
+			wantErr: require.NoError, // no nested jars
 			expected: map[string]pkg.Package{
 				"example-java-app-gradle": {
 					Name:     "example-java-app-gradle",
@@ -182,6 +204,14 @@ func TestParseJar(t *testing.T) {
 								},
 							},
 						},
+						// PomProject: &pkg.JavaPomProject{
+						// 	Path:       "META-INF/maven/io.jenkins.plugins/example-jenkins-plugin/pom.xml",
+						// 	Parent:     &pkg.JavaPomParent{GroupID: "org.jenkins-ci.plugins", ArtifactID: "plugin", Version: "4.46"},
+						// 	GroupID:    "io.jenkins.plugins",
+						// 	ArtifactID: "example-jenkins-plugin",
+						// 	Version:    "1.0-SNAPSHOT",
+						// 	Name:       "Example Jenkins Plugin",
+						// },
 					},
 				},
 				"joda-time": {
@@ -191,14 +221,10 @@ func TestParseJar(t *testing.T) {
 					Language: pkg.Java,
 					Type:     pkg.JavaPkg,
 					Licenses: pkg.NewLicenseSet(
-						pkg.NewLicenseFromFields(
-							"Apache 2",
-							"http://www.apache.org/licenses/LICENSE-2.0.txt",
-							func() *file.Location {
-								l := file.NewLocation("test-fixtures/java-builds/packages/example-java-app-gradle-0.1.0.jar")
-								return &l
-							}(),
-						),
+						pkg.NewLicenseFromFieldsWithContext(ctx, "Apache 2", "http://www.apache.org/licenses/LICENSE-2.0.txt", func() *file.Location {
+							l := file.NewLocation("test-fixtures/java-builds/packages/example-java-app-gradle-0.1.0.jar")
+							return &l
+						}()),
 					),
 					Metadata: pkg.JavaArchive{
 						// ensure that nested packages with different names than that of the parent are appended as
@@ -226,6 +252,7 @@ func TestParseJar(t *testing.T) {
 		{
 			name:    "example-java-app-maven",
 			fixture: "test-fixtures/java-builds/packages/example-java-app-maven-0.1.0.jar",
+			wantErr: require.NoError, // no nested jars
 			ignoreExtras: []string{
 				"Build-Jdk", // can't guarantee the JDK used at build time
 				"Built-By",  // podman returns the real UID
@@ -282,6 +309,12 @@ func TestParseJar(t *testing.T) {
 							ArtifactID: "example-java-app-maven",
 							Version:    "0.1.0",
 						},
+						PomProject: &pkg.JavaPomProject{
+							Path:       "META-INF/maven/org.anchore/example-java-app-maven/pom.xml",
+							GroupID:    "org.anchore",
+							ArtifactID: "example-java-app-maven",
+							Version:    "0.1.0",
+						},
 					},
 				},
 				"joda-time": {
@@ -289,14 +322,10 @@ func TestParseJar(t *testing.T) {
 					Version: "2.9.2",
 					PURL:    "pkg:maven/joda-time/joda-time@2.9.2",
 					Licenses: pkg.NewLicenseSet(
-						pkg.NewLicenseFromFields(
-							"Apache 2",
-							"http://www.apache.org/licenses/LICENSE-2.0.txt",
-							func() *file.Location {
-								l := file.NewLocation("test-fixtures/java-builds/packages/example-java-app-maven-0.1.0.jar")
-								return &l
-							}(),
-						),
+						pkg.NewLicenseFromFieldsWithContext(ctx, "Apache 2", "http://www.apache.org/licenses/LICENSE-2.0.txt", func() *file.Location {
+							l := file.NewLocation("test-fixtures/java-builds/packages/example-java-app-maven-0.1.0.jar")
+							return &l
+						}()),
 					),
 					Language: pkg.Java,
 					Type:     pkg.JavaPkg,
@@ -343,21 +372,26 @@ func TestParseJar(t *testing.T) {
 				UseNetwork:              false,
 				UseMavenLocalRepository: false,
 			}
-			parser, cleanupFn, err := newJavaArchiveParser(file.LocationReadCloser{
-				Location:   file.NewLocation(fixture.Name()),
-				ReadCloser: fixture,
-			}, false, cfg)
+			parser, cleanupFn, err := newJavaArchiveParser(context.Background(),
+				file.LocationReadCloser{
+					Location:   file.NewLocation(fixture.Name()),
+					ReadCloser: fixture,
+				}, false, cfg)
 			defer cleanupFn()
 			require.NoError(t, err)
 
-			actual, _, err := parser.parse(context.Background())
-			require.NoError(t, err)
+			actual, _, err := parser.parse(ctx, nil)
+			if test.wantErr != nil {
+				test.wantErr(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 
 			if len(actual) != len(test.expected) {
 				for _, a := range actual {
 					t.Log("   ", a)
 				}
-				t.Fatalf("unexpected package count: %d!=%d", len(actual), len(test.expected))
+				t.Fatalf("unexpected package count; expected: %d got: %d", len(test.expected), len(actual))
 			}
 
 			var parent *pkg.Package
@@ -409,11 +443,18 @@ func TestParseJar(t *testing.T) {
 						metadata.Manifest.Main = newMain
 					}
 				}
-
 				// write censored data back
 				a.Metadata = metadata
 
-				pkgtest.AssertPackagesEqual(t, e, a)
+				// we can't use cmpopts.IgnoreFields for the license contents because of the set structure
+				// drop the license contents from the comparison
+				licenses := a.Licenses.ToSlice()
+				for i := range licenses {
+					licenses[i].Contents = ""
+				}
+				a.Licenses = pkg.NewLicenseSet(licenses...)
+
+				pkgtest.AssertPackagesEqual(t, e, a, cmpopts.IgnoreFields(pkg.License{}, "Contents"))
 			}
 		})
 	}
@@ -621,10 +662,10 @@ func TestParseNestedJar(t *testing.T) {
 			require.NoError(t, err)
 			gap := newGenericArchiveParserAdapter(ArchiveCatalogerConfig{})
 
-			actual, _, err := gap.parseJavaArchive(context.Background(), nil, nil, file.LocationReadCloser{
+			actual, _, err := gap.processJavaArchive(context.Background(), file.LocationReadCloser{
 				Location:   file.NewLocation(fixture.Name()),
 				ReadCloser: fixture,
-			})
+			}, nil)
 			require.NoError(t, err)
 
 			expectedNameVersionPairSet := strset.New()
@@ -762,8 +803,8 @@ func Test_newPackageFromMavenData(t *testing.T) {
 				Version:    "1.0",
 			},
 			project: &parsedPomProject{
-				project: &gopom.Project{
-					Parent: &gopom.Parent{
+				project: &maven.Project{
+					Parent: &maven.Parent{
 						GroupID:    ptr("some-parent-group-id"),
 						ArtifactID: ptr("some-parent-artifact-id"),
 						Version:    ptr("1.0-parent"),
@@ -774,7 +815,7 @@ func Test_newPackageFromMavenData(t *testing.T) {
 					Version:     ptr("1.0"),
 					Description: ptr("desc"),
 					URL:         ptr("aweso.me"),
-					Licenses: &[]gopom.License{
+					Licenses: &[]maven.License{
 						{
 							Name: ptr("MIT"),
 							URL:  ptr("https://opensource.org/licenses/MIT"),
@@ -1038,7 +1079,7 @@ func Test_newPackageFromMavenData(t *testing.T) {
 			}
 			test.expectedParent.Locations = locations
 
-			r := newMavenResolver(nil, DefaultArchiveCatalogerConfig())
+			r := maven.NewResolver(nil, maven.DefaultConfig())
 			actualPackage := newPackageFromMavenData(context.Background(), r, test.props, test.project, test.parent, file.NewLocation(virtualPath))
 			if test.expectedPackage == nil {
 				require.Nil(t, actualPackage)
@@ -1073,12 +1114,130 @@ func Test_artifactIDMatchesFilename(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, artifactIDMatchesFilename(tt.artifactID, tt.fileName, nil))
+			assert.Equal(t, tt.want, artifactIDMatchesFilename(tt.artifactID, tt.fileName, strset.New()))
 		})
 	}
 }
 
 func Test_parseJavaArchive_regressions(t *testing.T) {
+	ctx := context.TODO()
+	apiAll := pkg.Package{
+		Name:      "api-all",
+		Version:   "2.0.0",
+		Type:      pkg.JavaPkg,
+		Language:  pkg.Java,
+		PURL:      "pkg:maven/org.apache.directory.api/api-all@2.0.0",
+		Locations: file.NewLocationSet(file.NewLocation("test-fixtures/jar-metadata/cache/api-all-2.0.0-sources.jar")),
+		Metadata: pkg.JavaArchive{
+			VirtualPath: "test-fixtures/jar-metadata/cache/api-all-2.0.0-sources.jar",
+			Manifest: &pkg.JavaManifest{
+				Main: []pkg.KeyValue{
+					{
+						Key:   "Manifest-Version",
+						Value: "1.0",
+					},
+					{
+						Key:   "Built-By",
+						Value: "elecharny",
+					},
+					{
+						Key:   "Created-By",
+						Value: "Apache Maven 3.6.0",
+					},
+					{
+						Key:   "Build-Jdk",
+						Value: "1.8.0_191",
+					},
+				},
+			},
+			PomProperties: &pkg.JavaPomProperties{
+				Path:       "META-INF/maven/org.apache.directory.api/api-all/pom.properties",
+				GroupID:    "org.apache.directory.api",
+				ArtifactID: "api-all",
+				Version:    "2.0.0",
+			}, PomProject: &pkg.JavaPomProject{
+				Path:       "META-INF/maven/org.apache.directory.api/api-all/pom.xml",
+				ArtifactID: "api-all",
+				GroupID:    "org.apache.directory.api",
+				Version:    "2.0.0",
+				Name:       "Apache Directory API All",
+				Parent:     &pkg.JavaPomParent{GroupID: "org.apache.directory.api", ArtifactID: "api-parent", Version: "2.0.0"},
+			},
+		},
+	}
+
+	apiAsn1Api := pkg.Package{
+		Name:      "api-asn1-api",
+		Version:   "2.0.0",
+		PURL:      "pkg:maven/org.apache.directory.api/api-asn1-api@2.0.0",
+		Locations: file.NewLocationSet(file.NewLocation("test-fixtures/jar-metadata/cache/api-all-2.0.0-sources.jar")),
+		Type:      pkg.JavaPkg,
+		Language:  pkg.Java,
+		Metadata: pkg.JavaArchive{
+			VirtualPath: "test-fixtures/jar-metadata/cache/api-all-2.0.0-sources.jar:org.apache.directory.api:api-asn1-api",
+			PomProperties: &pkg.JavaPomProperties{
+				Path:       "META-INF/maven/org.apache.directory.api/api-asn1-api/pom.properties",
+				GroupID:    "org.apache.directory.api",
+				ArtifactID: "api-asn1-api",
+				Version:    "2.0.0",
+			},
+			PomProject: &pkg.JavaPomProject{
+				Path:        "META-INF/maven/org.apache.directory.api/api-asn1-api/pom.xml",
+				ArtifactID:  "api-asn1-api",
+				GroupID:     "org.apache.directory.api",
+				Version:     "2.0.0",
+				Name:        "Apache Directory API ASN.1 API",
+				Description: "ASN.1 API",
+				Parent: &pkg.JavaPomParent{
+					GroupID:    "org.apache.directory.api",
+					ArtifactID: "api-asn1-parent",
+					Version:    "2.0.0",
+				},
+			},
+			Parent: &apiAll,
+		},
+	}
+
+	micronautAop := pkg.Package{
+		Name:      "micronaut-aop",
+		Version:   "4.9.11",
+		PURL:      "pkg:maven/io.micronaut/micronaut-aop@4.9.11",
+		Locations: file.NewLocationSet(file.NewLocation("test-fixtures/jar-metadata/cache/micronaut-aop-4.9.11.jar")),
+		Type:      pkg.JavaPkg,
+		Language:  pkg.Java,
+		Metadata: pkg.JavaArchive{
+			VirtualPath: "test-fixtures/jar-metadata/cache/micronaut-aop-4.9.11.jar",
+			Manifest: &pkg.JavaManifest{
+				Main: []pkg.KeyValue{
+					{
+						Key:   "Manifest-Version",
+						Value: "1.0",
+					},
+					{
+						Key:   "Automatic-Module-Name",
+						Value: "io.micronaut.micronaut_aop",
+					},
+					{
+						Key:   "Implementation-Version",
+						Value: "4.9.11",
+					},
+					{
+						Key:   "Implementation-Title",
+						Value: "Micronaut Core",
+					},
+				},
+			}, PomProject: &pkg.JavaPomProject{
+				Path:        "META-INF/maven/io.micronaut/micronaut-aop/pom.xml",
+				ArtifactID:  "micronaut-aop",
+				GroupID:     "io.micronaut",
+				Version:     "4.9.11",
+				Name:        "Micronaut Core",
+				Description: "Core components supporting the Micronaut Framework",
+				URL:         "https://micronaut.io",
+			},
+		},
+	}
+
 	tests := []struct {
 		name                  string
 		fixtureName           string
@@ -1099,7 +1258,8 @@ func Test_parseJavaArchive_regressions(t *testing.T) {
 					PURL:      "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.15.2",
 					Locations: file.NewLocationSet(file.NewLocation("test-fixtures/jar-metadata/cache/jackson-core-2.15.2.jar")),
 					Licenses: pkg.NewLicenseSet(
-						pkg.NewLicensesFromLocation(
+						pkg.NewLicensesFromLocationWithContext(
+							ctx,
 							file.NewLocation("test-fixtures/jar-metadata/cache/jackson-core-2.15.2.jar"),
 							"https://www.apache.org/licenses/LICENSE-2.0.txt",
 						)...,
@@ -1135,6 +1295,16 @@ func Test_parseJavaArchive_regressions(t *testing.T) {
 								{Key: "Specification-Version", Value: "2.15.2"},
 							},
 						},
+						PomProject: &pkg.JavaPomProject{
+							Path:        "META-INF/maven/com.fasterxml.jackson.core/jackson-core/pom.xml",
+							ArtifactID:  "jackson-core",
+							GroupID:     "com.fasterxml.jackson.core",
+							Version:     "2.15.2",
+							Name:        "Jackson-core",
+							Description: "Core Jackson processing abstractions (aka Streaming API), implementation for JSON",
+							URL:         "https://github.com/FasterXML/jackson-core",
+							Parent:      &pkg.JavaPomParent{GroupID: "com.fasterxml.jackson", ArtifactID: "jackson-base", Version: "2.15.2"},
+						},
 						// not under test
 						//ArchiveDigests: []file.Digest{{Algorithm: "sha1", Value: "d8bc1d9c428c96fe447e2c429fc4304d141024df"}},
 					},
@@ -1153,7 +1323,8 @@ func Test_parseJavaArchive_regressions(t *testing.T) {
 					PURL:      "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.15.2",
 					Locations: file.NewLocationSet(file.NewLocation("test-fixtures/jar-metadata/cache/com.fasterxml.jackson.core.jackson-core-2.15.2.jar")),
 					Licenses: pkg.NewLicenseSet(
-						pkg.NewLicensesFromLocation(
+						pkg.NewLicensesFromLocationWithContext(
+							ctx,
 							file.NewLocation("test-fixtures/jar-metadata/cache/com.fasterxml.jackson.core.jackson-core-2.15.2.jar"),
 							"https://www.apache.org/licenses/LICENSE-2.0.txt",
 						)...,
@@ -1189,6 +1360,16 @@ func Test_parseJavaArchive_regressions(t *testing.T) {
 								{Key: "Specification-Version", Value: "2.15.2"},
 							},
 						},
+						PomProject: &pkg.JavaPomProject{
+							Path:        "META-INF/maven/com.fasterxml.jackson.core/jackson-core/pom.xml",
+							ArtifactID:  "jackson-core",
+							GroupID:     "com.fasterxml.jackson.core",
+							Version:     "2.15.2",
+							Name:        "Jackson-core",
+							Description: "Core Jackson processing abstractions (aka Streaming API), implementation for JSON",
+							URL:         "https://github.com/FasterXML/jackson-core",
+							Parent:      &pkg.JavaPomParent{GroupID: "com.fasterxml.jackson", ArtifactID: "jackson-base", Version: "2.15.2"},
+						},
 						// not under test
 						//ArchiveDigests: []file.Digest{{Algorithm: "sha1", Value: "abd3e329270fc54a2acaceb45420fd5710ecefd5"}},
 					},
@@ -1200,73 +1381,14 @@ func Test_parseJavaArchive_regressions(t *testing.T) {
 			fixtureName:  "api-all-2.0.0-sources",
 			assignParent: true,
 			expectedPkgs: []pkg.Package{
+				apiAll,
+				apiAsn1Api,
+			},
+			expectedRelationships: []artifact.Relationship{
 				{
-					Name:      "api-all",
-					Version:   "2.0.0",
-					Type:      pkg.JavaPkg,
-					Language:  pkg.Java,
-					PURL:      "pkg:maven/org.apache.directory.api/api-all@2.0.0",
-					Locations: file.NewLocationSet(file.NewLocation("test-fixtures/jar-metadata/cache/api-all-2.0.0-sources.jar")),
-					Metadata: pkg.JavaArchive{
-						VirtualPath: "test-fixtures/jar-metadata/cache/api-all-2.0.0-sources.jar",
-						Manifest: &pkg.JavaManifest{
-							Main: []pkg.KeyValue{
-								{
-									Key:   "Manifest-Version",
-									Value: "1.0",
-								},
-								{
-									Key:   "Built-By",
-									Value: "elecharny",
-								},
-								{
-									Key:   "Created-By",
-									Value: "Apache Maven 3.6.0",
-								},
-								{
-									Key:   "Build-Jdk",
-									Value: "1.8.0_191",
-								},
-							},
-						},
-						PomProperties: &pkg.JavaPomProperties{
-							Path:       "META-INF/maven/org.apache.directory.api/api-all/pom.properties",
-							GroupID:    "org.apache.directory.api",
-							ArtifactID: "api-all",
-							Version:    "2.0.0",
-						},
-					},
-				},
-				{
-					Name:      "api-asn1-api",
-					Version:   "2.0.0",
-					PURL:      "pkg:maven/org.apache.directory.api/api-asn1-api@2.0.0",
-					Locations: file.NewLocationSet(file.NewLocation("test-fixtures/jar-metadata/cache/api-all-2.0.0-sources.jar")),
-					Type:      pkg.JavaPkg,
-					Language:  pkg.Java,
-					Metadata: pkg.JavaArchive{
-						VirtualPath: "test-fixtures/jar-metadata/cache/api-all-2.0.0-sources.jar:org.apache.directory.api:api-asn1-api",
-						PomProperties: &pkg.JavaPomProperties{
-							Path:       "META-INF/maven/org.apache.directory.api/api-asn1-api/pom.properties",
-							GroupID:    "org.apache.directory.api",
-							ArtifactID: "api-asn1-api",
-							Version:    "2.0.0",
-						},
-						PomProject: &pkg.JavaPomProject{
-							Path:        "META-INF/maven/org.apache.directory.api/api-asn1-api/pom.xml",
-							ArtifactID:  "api-asn1-api",
-							GroupID:     "org.apache.directory.api",
-							Version:     "2.0.0",
-							Name:        "Apache Directory API ASN.1 API",
-							Description: "ASN.1 API",
-							Parent: &pkg.JavaPomParent{
-								GroupID:    "org.apache.directory.api",
-								ArtifactID: "api-asn1-parent",
-								Version:    "2.0.0",
-							},
-						},
-						Parent: nil,
-					},
+					From: apiAsn1Api,
+					To:   apiAll,
+					Type: artifact.DependencyOfRelationship,
 				},
 			},
 		},
@@ -1314,6 +1436,14 @@ func Test_parseJavaArchive_regressions(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:          "micronaut-aop",
+			fixtureName:   "micronaut-aop-4.9.11",
+			fileExtension: "jar",
+			expectedPkgs: []pkg.Package{
+				micronautAop,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1348,11 +1478,15 @@ func Test_parseJavaArchive_regressions(t *testing.T) {
 func Test_deterministicMatchingPomProperties(t *testing.T) {
 	tests := []struct {
 		fixture  string
-		expected mavenID
+		expected maven.ID
 	}{
 		{
 			fixture:  "multiple-matching-2.11.5",
-			expected: mavenID{"org.multiple", "multiple-matching-1", "2.11.5"},
+			expected: maven.NewID("org.multiple", "multiple-matching-1", "2.11.5"),
+		},
+		{
+			fixture:  "org.multiple-thename",
+			expected: maven.NewID("org.multiple", "thename", "10.11.12"),
 		},
 	}
 
@@ -1365,15 +1499,16 @@ func Test_deterministicMatchingPomProperties(t *testing.T) {
 					fixture, err := os.Open(fixturePath)
 					require.NoError(t, err)
 
-					parser, cleanupFn, err := newJavaArchiveParser(file.LocationReadCloser{
-						Location:   file.NewLocation(fixture.Name()),
-						ReadCloser: fixture,
-					}, false, ArchiveCatalogerConfig{UseNetwork: false})
+					parser, cleanupFn, err := newJavaArchiveParser(context.Background(),
+						file.LocationReadCloser{
+							Location:   file.NewLocation(fixture.Name()),
+							ReadCloser: fixture,
+						}, false, ArchiveCatalogerConfig{UseNetwork: false})
 					defer cleanupFn()
 					require.NoError(t, err)
 
 					groupID, artifactID, version, _ := parser.discoverMainPackageFromPomInfo(context.TODO())
-					require.Equal(t, test.expected, mavenID{groupID, artifactID, version})
+					require.Equal(t, test.expected, maven.NewID(groupID, artifactID, version))
 				}()
 			}
 		})
@@ -1383,10 +1518,7 @@ func Test_deterministicMatchingPomProperties(t *testing.T) {
 func assignParent(parent *pkg.Package, childPackages ...pkg.Package) {
 	for i, jp := range childPackages {
 		if v, ok := jp.Metadata.(pkg.JavaArchive); ok {
-			parent := *parent
-			// PURL are not calculated after the fact for parent
-			parent.PURL = ""
-			v.Parent = &parent
+			v.Parent = parent
 			childPackages[i].Metadata = v
 		}
 	}
@@ -1399,7 +1531,7 @@ func generateJavaBuildFixture(t *testing.T, fixturePath string) {
 	}
 
 	makeTask := strings.TrimPrefix(fixturePath, "test-fixtures/java-builds/")
-	t.Logf(color.Bold.Sprintf("Generating Fixture from 'make %s'", makeTask))
+	t.Log(color.Bold.Sprintf("Generating Fixture from 'make %s'", makeTask))
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -1424,7 +1556,7 @@ func generateJavaMetadataJarFixture(t *testing.T, fixtureName string, fileExtens
 	}
 
 	makeTask := filepath.Join("cache", fixtureName+"."+fileExtension)
-	t.Logf(color.Bold.Sprintf("Generating Fixture from 'make %s'", makeTask))
+	t.Log(color.Bold.Sprintf("Generating Fixture from 'make %s'", makeTask))
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -1487,4 +1619,34 @@ func run(t testing.TB, cmd *exec.Cmd) {
 // ptr returns a pointer to the given value
 func ptr[T any](value T) *T {
 	return &value
+}
+
+func Test_corruptJarArchive(t *testing.T) {
+	ap := newGenericArchiveParserAdapter(DefaultArchiveCatalogerConfig())
+	pkgtest.NewCatalogTester().
+		FromFile(t, "test-fixtures/corrupt/example.jar").
+		WithError().
+		TestParser(t, ap.parseJavaArchive)
+}
+
+func Test_jarPomPropertyResolutionDoesNotPanic(t *testing.T) {
+	jarName := generateJavaMetadataJarFixture(t, "commons-lang3-3.12.0", "jar")
+	fixture, err := os.Open(jarName)
+	require.NoError(t, err)
+
+	ctx := context.TODO()
+	// setup parser
+	ap, cleanupFn, err := newJavaArchiveParser(context.Background(),
+		file.LocationReadCloser{
+			Location:   file.NewLocation(fixture.Name()),
+			ReadCloser: fixture,
+		}, false, ArchiveCatalogerConfig{
+			UseMavenLocalRepository: true,
+			MavenLocalRepositoryDir: "internal/maven/test-fixtures/maven-repo",
+		})
+	defer cleanupFn()
+	require.NoError(t, err)
+
+	_, _, err = ap.parse(ctx, nil)
+	require.NoError(t, err)
 }

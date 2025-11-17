@@ -16,6 +16,8 @@ func SourceInfo(p pkg.Package) string {
 		answer = "acquired package info from RPM DB"
 	case pkg.ApkPkg:
 		answer = "acquired package info from APK DB"
+	case pkg.BitnamiPkg:
+		answer = "acquired package info from a Bitnami SBOM"
 	case pkg.DartPubPkg:
 		answer = "acquired package info from pubspec manifest"
 	case pkg.DebPkg:
@@ -32,16 +34,22 @@ func SourceInfo(p pkg.Package) string {
 		answer = "acquired package info from installed gem metadata file"
 	case pkg.GoModulePkg:
 		answer = "acquired package info from go module information"
+	case pkg.GraalVMNativeImagePkg:
+		answer = "acquired package info from GraalVM native image"
 	case pkg.RustPkg:
 		answer = "acquired package info from rust cargo manifest"
 	case pkg.PhpComposerPkg:
 		answer = "acquired package info from PHP composer manifest"
+	case pkg.PhpPearPkg:
+		answer = "acquired package info from PHP Pear manifest"
 	case pkg.PhpPeclPkg:
 		answer = "acquired package info from PHP Pecl manifest"
 	case pkg.CocoapodsPkg:
 		answer = "acquired package info from installed cocoapods manifest file"
 	case pkg.ConanPkg:
 		answer = "acquired package info from conan manifest"
+	case pkg.CondaPkg:
+		answer = "acquired package info from conda metadata"
 	case pkg.PortagePkg:
 		answer = "acquired package info from portage DB"
 	case pkg.HackagePkg:
@@ -70,6 +78,12 @@ func SourceInfo(p pkg.Package) string {
 		answer = "acquired package info from GitHub Actions workflow file or composite action file"
 	case pkg.WordpressPluginPkg:
 		answer = "acquired package info from found wordpress plugin PHP source files"
+	case pkg.HomebrewPkg:
+		answer = "acquired package info from Homebrew formula"
+	case pkg.TerraformPkg:
+		answer = "acquired package info from Terraform dependency lock file"
+	case pkg.ModelPkg:
+		answer = "acquired package info from AI artifact (e.g. GGUF File"
 	default:
 		answer = "acquired package info from the following paths"
 	}

@@ -5,26 +5,40 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/licensecheck"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	stereofile "github.com/anchore/stereoscope/pkg/file"
 	"github.com/anchore/stereoscope/pkg/imagetest"
 	"github.com/anchore/syft/internal/cmptest"
+	"github.com/anchore/syft/internal/licenses"
 	"github.com/anchore/syft/internal/relationship"
 	"github.com/anchore/syft/syft/artifact"
 	"github.com/anchore/syft/syft/file"
+	"github.com/anchore/syft/syft/internal/fileresolver"
 	"github.com/anchore/syft/syft/linux"
 	"github.com/anchore/syft/syft/pkg"
 	"github.com/anchore/syft/syft/pkg/cataloger/generic"
 	"github.com/anchore/syft/syft/source"
 	"github.com/anchore/syft/syft/source/directorysource"
+	"github.com/anchore/syft/syft/source/filesource"
 	"github.com/anchore/syft/syft/source/stereoscopesource"
+)
+
+var (
+	once           sync.Once
+	licenseScanner *licenses.Scanner
 )
 
 type CatalogTester struct {
@@ -44,14 +58,31 @@ type CatalogTester struct {
 	licenseComparer                cmptest.LicenseComparer
 	packageStringer                func(pkg.Package) string
 	customAssertions               []func(t *testing.T, pkgs []pkg.Package, relationships []artifact.Relationship)
+	context                        context.Context
+	skipTestObservations           bool
+}
+
+func Context() context.Context {
+	once.Do(func() {
+		// most of the time in testing is initializing the scanner. Let's do that just once
+		sc := &licenses.ScannerConfig{Scanner: licensecheck.Scan, CoverageThreshold: 75}
+		scanner, err := licenses.NewScanner(sc)
+		if err != nil {
+			panic("unable to setup licences scanner for testing")
+		}
+		licenseScanner = &scanner
+	})
+
+	return licenses.SetContextLicenseScanner(context.Background(), *licenseScanner)
 }
 
 func NewCatalogTester() *CatalogTester {
 	return &CatalogTester{
-		wantErr:          require.NoError,
+		context:          Context(),
 		locationComparer: cmptest.DefaultLocationComparer,
 		licenseComparer:  cmptest.DefaultLicenseComparer,
 		packageStringer:  stringPackage,
+		resolver:         fileresolver.Empty{},
 		ignoreUnfulfilledPathResponses: map[string][]string{
 			"FilesByPath": {
 				// most catalogers search for a linux release, which will not be fulfilled in testing
@@ -65,8 +96,17 @@ func NewCatalogTester() *CatalogTester {
 	}
 }
 
+func (p *CatalogTester) WithContext(ctx context.Context) *CatalogTester {
+	p.context = ctx
+	return p
+}
+
 func (p *CatalogTester) FromDirectory(t *testing.T, path string) *CatalogTester {
 	t.Helper()
+
+	if path == "" {
+		return p
+	}
 
 	s, err := directorysource.NewFromPath(path)
 	require.NoError(t, err)
@@ -78,14 +118,33 @@ func (p *CatalogTester) FromDirectory(t *testing.T, path string) *CatalogTester 
 	return p
 }
 
+func (p *CatalogTester) FromFileSource(t *testing.T, path string) *CatalogTester {
+	t.Helper()
+
+	s, err := filesource.NewFromPath(path)
+	require.NoError(t, err)
+	resolver, err := s.FileResolver(source.AllLayersScope)
+	require.NoError(t, err)
+
+	p.resolver = resolver
+	return p
+}
+
 func (p *CatalogTester) FromFile(t *testing.T, path string) *CatalogTester {
 	t.Helper()
+
+	if path == "" {
+		return p
+	}
+
+	absPath, err := filepath.Abs(path)
+	require.NoError(t, err)
 
 	fixture, err := os.Open(path)
 	require.NoError(t, err)
 
 	p.reader = file.LocationReadCloser{
-		Location:   file.NewLocation(fixture.Name()),
+		Location:   file.NewVirtualLocationFromDirectory(fixture.Name(), fixture.Name(), *stereofile.NewFileReference(stereofile.Path(absPath))),
 		ReadCloser: fixture,
 	}
 	return p
@@ -113,7 +172,6 @@ func (p *CatalogTester) WithEnv(env *generic.Environment) *CatalogTester {
 }
 
 func (p *CatalogTester) WithError() *CatalogTester {
-	p.assertResultExpectations = true
 	p.wantErr = require.Error
 	return p
 }
@@ -130,6 +188,11 @@ func (p *CatalogTester) WithResolver(r file.Resolver) *CatalogTester {
 
 func (p *CatalogTester) WithImageResolver(t *testing.T, fixtureName string) *CatalogTester {
 	t.Helper()
+
+	if fixtureName == "" {
+		return p
+	}
+
 	img := imagetest.GetFixtureImage(t, "docker-archive", fixtureName)
 
 	s := stereoscopesource.New(img, stereoscopesource.ImageConfig{
@@ -148,29 +211,8 @@ func (p *CatalogTester) ExpectsAssertion(a func(t *testing.T, pkgs []pkg.Package
 }
 
 func (p *CatalogTester) IgnoreLocationLayer() *CatalogTester {
-	p.locationComparer = func(x, y file.Location) bool {
-		return cmp.Equal(x.Coordinates.RealPath, y.Coordinates.RealPath) && cmp.Equal(x.AccessPath, y.AccessPath)
-	}
-
-	// we need to update the license comparer to use the ignored location layer
-	p.licenseComparer = func(x, y pkg.License) bool {
-		return cmp.Equal(x, y, cmp.Comparer(p.locationComparer), cmp.Comparer(
-			func(x, y file.LocationSet) bool {
-				xs := x.ToSlice()
-				ys := y.ToSlice()
-				if len(xs) != len(ys) {
-					return false
-				}
-				for i, xe := range xs {
-					ye := ys[i]
-					if !p.locationComparer(xe, ye) {
-						return false
-					}
-				}
-
-				return true
-			}))
-	}
+	p.locationComparer = cmptest.LocationComparerWithoutLayer
+	p.licenseComparer = cmptest.LicenseComparerWithoutLocationLayer
 	return p
 }
 
@@ -223,10 +265,23 @@ func (p *CatalogTester) IgnoreUnfulfilledPathResponses(paths ...string) *Catalog
 	return p
 }
 
+func (p *CatalogTester) WithoutTestObserver() *CatalogTester {
+	p.skipTestObservations = true
+	return p
+}
+
 func (p *CatalogTester) TestParser(t *testing.T, parser generic.Parser) {
 	t.Helper()
-	pkgs, relationships, err := parser(context.Background(), p.resolver, p.env, p.reader)
-	p.wantErr(t, err)
+	pkgs, relationships, err := parser(p.context, p.resolver, p.env, p.reader)
+
+	// only test for errors if explicitly requested
+	if p.wantErr != nil {
+		p.wantErr(t, err)
+	}
+
+	// track metadata types for cataloger discovery
+	p.trackParserMetadata(t, parser, pkgs, relationships)
+
 	p.assertPkgs(t, pkgs, relationships)
 }
 
@@ -235,7 +290,7 @@ func (p *CatalogTester) TestCataloger(t *testing.T, cataloger pkg.Cataloger) {
 
 	resolver := NewObservingResolver(p.resolver)
 
-	pkgs, relationships, err := cataloger.Catalog(context.Background(), resolver)
+	pkgs, relationships, err := cataloger.Catalog(p.context, resolver)
 
 	// this is a minimum set, the resolver may return more that just this list
 	for _, path := range p.expectedPathResponses {
@@ -247,8 +302,15 @@ func (p *CatalogTester) TestCataloger(t *testing.T, cataloger pkg.Cataloger) {
 		assert.ElementsMatchf(t, p.expectedContentQueries, resolver.AllContentQueries(), "unexpected content queries observed: diff %s", cmp.Diff(p.expectedContentQueries, resolver.AllContentQueries()))
 	}
 
-	if p.assertResultExpectations {
+	// only test for errors if explicitly requested
+	if p.wantErr != nil {
 		p.wantErr(t, err)
+	}
+
+	// track metadata types for cataloger discovery
+	p.trackCatalogerMetadata(t, cataloger, pkgs, relationships)
+
+	if p.assertResultExpectations {
 		p.assertPkgs(t, pkgs, relationships)
 	}
 
@@ -256,7 +318,7 @@ func (p *CatalogTester) TestCataloger(t *testing.T, cataloger pkg.Cataloger) {
 		a(t, pkgs, relationships)
 	}
 
-	if !p.assertResultExpectations && len(p.customAssertions) == 0 {
+	if !p.assertResultExpectations && len(p.customAssertions) == 0 && p.wantErr == nil {
 		resolver.PruneUnfulfilledPathResponses(p.ignoreUnfulfilledPathResponses, p.ignoreAnyUnfulfilledPaths...)
 
 		// if we aren't testing the results, we should focus on what was searched for (for glob-centric tests)
@@ -267,7 +329,7 @@ func (p *CatalogTester) TestCataloger(t *testing.T, cataloger pkg.Cataloger) {
 func (p *CatalogTester) assertPkgs(t *testing.T, pkgs []pkg.Package, relationships []artifact.Relationship) {
 	t.Helper()
 
-	p.compareOptions = append(p.compareOptions, cmptest.CommonOptions(p.licenseComparer, p.locationComparer)...)
+	p.compareOptions = append(p.compareOptions, cmptest.BuildOptions(p.licenseComparer, p.locationComparer)...)
 
 	{
 		r := cmptest.NewDiffReporter()
@@ -292,6 +354,9 @@ func (p *CatalogTester) assertPkgs(t *testing.T, pkgs []pkg.Package, relationshi
 		opts = append(opts, p.compareOptions...)
 		opts = append(opts, cmp.Reporter(&r))
 
+		// ignore the "FoundBy" field on relationships as it is set in the generic cataloger before it's presence on the relationship
+		opts = append(opts, cmpopts.IgnoreFields(pkg.Package{}, "FoundBy"))
+
 		// order should not matter
 		relationship.Sort(p.expectedRelationships)
 		relationship.Sort(relationships)
@@ -314,59 +379,31 @@ func TestCataloger(t *testing.T, fixtureDir string, cataloger pkg.Cataloger, exp
 	NewCatalogTester().FromDirectory(t, fixtureDir).Expects(expectedPkgs, expectedRelationships).TestCataloger(t, cataloger)
 }
 
+func TestCatalogerFromFileSource(t *testing.T, fixturePath string, cataloger pkg.Cataloger, expectedPkgs []pkg.Package, expectedRelationships []artifact.Relationship) {
+	t.Helper()
+	NewCatalogTester().FromFileSource(t, fixturePath).Expects(expectedPkgs, expectedRelationships).TestCataloger(t, cataloger)
+}
+
 func TestFileParserWithEnv(t *testing.T, fixturePath string, parser generic.Parser, env *generic.Environment, expectedPkgs []pkg.Package, expectedRelationships []artifact.Relationship) {
 	t.Helper()
 
 	NewCatalogTester().FromFile(t, fixturePath).WithEnv(env).Expects(expectedPkgs, expectedRelationships).TestParser(t, parser)
 }
 
-func AssertPackagesEqual(t *testing.T, a, b pkg.Package) {
+func AssertPackagesEqual(t *testing.T, a, b pkg.Package, userOpts ...cmp.Option) {
 	t.Helper()
-	opts := []cmp.Option{
-		cmpopts.IgnoreFields(pkg.Package{}, "id"), // note: ID is not deterministic for test purposes
-		cmp.Comparer(
-			func(x, y file.LocationSet) bool {
-				xs := x.ToSlice()
-				ys := y.ToSlice()
+	opts := cmptest.DefaultOptions()
+	opts = append(opts, userOpts...)
 
-				if len(xs) != len(ys) {
-					return false
-				}
-				for i, xe := range xs {
-					ye := ys[i]
-					if !cmptest.DefaultLocationComparer(xe, ye) {
-						return false
-					}
-				}
-
-				return true
-			},
-		),
-		cmp.Comparer(
-			func(x, y pkg.LicenseSet) bool {
-				xs := x.ToSlice()
-				ys := y.ToSlice()
-
-				if len(xs) != len(ys) {
-					return false
-				}
-				for i, xe := range xs {
-					ye := ys[i]
-					if !cmptest.DefaultLicenseComparer(xe, ye) {
-						return false
-					}
-				}
-
-				return true
-			},
-		),
-		cmp.Comparer(
-			cmptest.DefaultLocationComparer,
-		),
-		cmp.Comparer(
-			cmptest.DefaultLicenseComparer,
-		),
+	if diff := cmp.Diff(a, b, opts...); diff != "" {
+		t.Errorf("unexpected packages from parsing (-expected +actual)\n%s", diff)
 	}
+}
+
+func AssertPackagesEqualIgnoreLayers(t *testing.T, a, b pkg.Package, userOpts ...cmp.Option) {
+	t.Helper()
+	opts := cmptest.DefaultIgnoreLocationLayerOptions()
+	opts = append(opts, userOpts...)
 
 	if diff := cmp.Diff(a, b, opts...); diff != "" {
 		t.Errorf("unexpected packages from parsing (-expected +actual)\n%s", diff)
@@ -438,4 +475,164 @@ func stringPackage(p pkg.Package) string {
 	}
 
 	return fmt.Sprintf("%s @ %s (%s)", p.Name, p.Version, loc)
+}
+
+// getFunctionName extracts the function name from a function pointer using reflection
+func getFunctionName(fn interface{}) string {
+	// get the function pointer
+	ptr := reflect.ValueOf(fn).Pointer()
+
+	// get the function details
+	funcForPC := runtime.FuncForPC(ptr)
+	if funcForPC == nil {
+		return ""
+	}
+
+	fullName := funcForPC.Name()
+
+	// extract just the function name from the full path
+	// e.g., "github.com/anchore/syft/syft/pkg/cataloger/python.parseRequirementsTxt"
+	//   -> "parseRequirementsTxt"
+	parts := strings.Split(fullName, ".")
+	if len(parts) > 0 {
+		name := parts[len(parts)-1]
+		// strip the -fm suffix that Go's reflection adds for methods
+		// e.g., "parsePackageLock-fm" -> "parsePackageLock"
+		return strings.TrimSuffix(name, "-fm")
+	}
+
+	return fullName
+}
+
+// getCatalogerName extracts the cataloger name from the test context or cataloger name
+func getCatalogerName(_ *testing.T, cataloger pkg.Cataloger) string {
+	// use the cataloger's name method if available
+	return cataloger.Name()
+}
+
+// getPackagePath extracts the package path from a function name
+// e.g., "github.com/anchore/syft/syft/pkg/cataloger/python.parseRequirementsTxt" -> "python"
+func getPackagePath(fn interface{}) string {
+	ptr := reflect.ValueOf(fn).Pointer()
+	funcForPC := runtime.FuncForPC(ptr)
+	if funcForPC == nil {
+		return ""
+	}
+
+	fullName := funcForPC.Name()
+
+	// extract package name from path
+	// e.g., "github.com/anchore/syft/syft/pkg/cataloger/python.parseRequirementsTxt"
+	//   -> "python"
+	if strings.Contains(fullName, "/cataloger/") {
+		parts := strings.Split(fullName, "/cataloger/")
+		if len(parts) > 1 {
+			// get the next segment after "/cataloger/"
+			remaining := parts[1]
+			// split by "." to get package name
+			pkgParts := strings.Split(remaining, ".")
+			if len(pkgParts) > 0 {
+				return pkgParts[0]
+			}
+		}
+	}
+
+	return ""
+}
+
+// getPackagePathFromCataloger extracts the package path from the caller's file path
+// For generic catalogers, the cataloger type is from the generic package, but we need
+// the package where the test is defined (e.g., rust, python, etc.)
+func getPackagePathFromCataloger(_ pkg.Cataloger) string {
+	// walk up the call stack to find the test file
+	// we're looking for a file in the cataloger directory structure
+	for i := 0; i < 10; i++ {
+		_, file, _, ok := runtime.Caller(i)
+		if !ok {
+			break
+		}
+
+		// extract package name from file path
+		// e.g., "/Users/.../syft/pkg/cataloger/rust/cataloger_test.go" -> "rust"
+		if strings.Contains(file, "/cataloger/") {
+			parts := strings.Split(file, "/cataloger/")
+			if len(parts) > 1 {
+				// get the next segment after "/cataloger/"
+				remaining := parts[1]
+				// split by "/" to get package name
+				pkgParts := strings.Split(remaining, "/")
+				if len(pkgParts) > 0 && pkgParts[0] != "internal" {
+					return pkgParts[0]
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+// trackParserMetadata records metadata types for a parser function
+func (p *CatalogTester) trackParserMetadata(t *testing.T, parser generic.Parser, pkgs []pkg.Package, relationships []artifact.Relationship) {
+	if p.skipTestObservations {
+		return
+	}
+
+	parserName := getFunctionName(parser)
+	if parserName == "" {
+		return
+	}
+
+	// try to infer package name from function path
+	packageName := getPackagePath(parser)
+	if packageName == "" {
+		return
+	}
+
+	tracker := getTracker()
+
+	// old tracking (still used by metadata discovery)
+	for _, pkg := range pkgs {
+		tracker.RecordParserPackageMetadata(packageName, parserName, pkg)
+	}
+
+	// new unified observations with capability tracking
+	tracker.RecordParserObservations(packageName, parserName, pkgs, relationships)
+
+	// ensure results are written when tests complete
+	t.Cleanup(func() {
+		_ = WriteResultsIfEnabled()
+	})
+}
+
+// trackCatalogerMetadata records metadata types for a cataloger
+func (p *CatalogTester) trackCatalogerMetadata(t *testing.T, cataloger pkg.Cataloger, pkgs []pkg.Package, relationships []artifact.Relationship) {
+	if p.skipTestObservations {
+		return
+	}
+
+	catalogerName := getCatalogerName(t, cataloger)
+	if catalogerName == "" {
+		return
+	}
+
+	// try to infer package name from cataloger type
+	packageName := getPackagePathFromCataloger(cataloger)
+	if packageName == "" {
+		return
+	}
+
+	tracker := getTracker()
+
+	// old tracking (still used by metadata discovery)
+	for _, pkg := range pkgs {
+		tracker.RecordCatalogerPackageMetadata(catalogerName, pkg)
+	}
+
+	// new unified observations with capability tracking
+	tracker.RecordCatalogerObservations(packageName, catalogerName, pkgs, relationships)
+
+	// ensure results are written when tests complete
+	t.Cleanup(func() {
+		_ = WriteResultsIfEnabled()
+	})
 }

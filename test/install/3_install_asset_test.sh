@@ -32,8 +32,20 @@ test_positive_snapshot_install_asset() {
 	  arch="amd64_v1"
   fi
 
+  # note: this is a change made in goreleaser v1.62.0
+  local_suffix=""
+  if [ "${arch}" == "arm64" ]; then
+    local_suffix="_v8.0"
+  fi
+
+  # note: this is a change made in goreleaser v2.5.0
+  if [ "${arch}" == "ppc64le" ]; then
+    local_suffix="_power8"
+  fi
+
+
   assertFilesEqual \
-    "$(snapshot_dir)/${os}-build_${os}_${arch}/${binary}" \
+    "$(snapshot_dir)/${os}-build_${os}_${arch}${local_suffix}/${binary}" \
     "${expected_path}" \
     "unable to verify installation of os=${os} arch=${arch} format=${format}"
 
@@ -87,6 +99,7 @@ run_test_case test_positive_snapshot_install_asset "linux" "s390x" "tar.gz"
 run_test_case test_positive_snapshot_install_asset "darwin" "amd64" "tar.gz"
 run_test_case test_positive_snapshot_install_asset "darwin" "arm64" "tar.gz"
 run_test_case test_positive_snapshot_install_asset "windows" "amd64" "zip"
+run_test_case test_positive_snapshot_install_asset "windows" "arm64" "zip"
 
 # let's make certain we covered all assets that were expected
 run_test_case test_install_asset_exercised_all_archive_assets

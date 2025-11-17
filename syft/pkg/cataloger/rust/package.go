@@ -1,7 +1,7 @@
 package rust
 
 import (
-	"github.com/microsoft/go-rustaudit"
+	"github.com/rust-secure-code/go-rustaudit"
 
 	"github.com/anchore/packageurl-go"
 	"github.com/anchore/syft/syft/file"
@@ -23,19 +23,6 @@ func newPackageFromCargoMetadata(m pkg.RustCargoLockEntry, locations ...file.Loc
 	p.SetID()
 
 	return p
-}
-
-func newPackagesFromAudit(location file.Location, versionInfo rustaudit.VersionInfo) []pkg.Package {
-	var pkgs []pkg.Package
-
-	for _, dep := range versionInfo.Packages {
-		p := newPackageFromAudit(&dep, location.WithAnnotation(pkg.EvidenceAnnotationKey, pkg.PrimaryEvidenceAnnotation))
-		if pkg.IsValid(&p) && dep.Kind == rustaudit.Runtime {
-			pkgs = append(pkgs, p)
-		}
-	}
-
-	return pkgs
 }
 
 func newPackageFromAudit(dep *rustaudit.Package, locations ...file.Location) pkg.Package {

@@ -3,8 +3,10 @@ package format
 import (
 	"io"
 
+	"github.com/anchore/syft/syft/format/cpes"
 	"github.com/anchore/syft/syft/format/cyclonedxjson"
 	"github.com/anchore/syft/syft/format/cyclonedxxml"
+	"github.com/anchore/syft/syft/format/purls"
 	"github.com/anchore/syft/syft/format/spdxjson"
 	"github.com/anchore/syft/syft/format/spdxtagvalue"
 	"github.com/anchore/syft/syft/format/syftjson"
@@ -24,6 +26,8 @@ func Decoders() []sbom.FormatDecoder {
 		cyclonedxjson.NewFormatDecoder(),
 		spdxtagvalue.NewFormatDecoder(),
 		spdxjson.NewFormatDecoder(),
+		purls.NewFormatDecoder(),
+		cpes.NewFormatDecoder(),
 	}
 }
 

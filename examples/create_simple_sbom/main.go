@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	_ "modernc.org/sqlite" // required for rpmdb and other features
+
 	"github.com/anchore/syft/syft"
 	"github.com/anchore/syft/syft/format"
 	"github.com/anchore/syft/syft/format/syftjson"
@@ -17,6 +19,7 @@ const defaultImage = "alpine:3.19"
 func main() {
 	// automagically get a source.Source for arbitrary string input
 	src := getSource(imageReference())
+	defer src.Close()
 
 	// catalog the given source and return a SBOM
 	sbom := getSBOM(src)
@@ -38,7 +41,6 @@ func imageReference() string {
 
 func getSource(input string) source.Source {
 	src, err := syft.GetSource(context.Background(), input, nil)
-
 	if err != nil {
 		panic(err)
 	}

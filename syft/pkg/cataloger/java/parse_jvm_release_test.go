@@ -307,6 +307,7 @@ func TestJvmPrimaryVendorProduct(t *testing.T) {
 	tests := []struct {
 		name            string
 		implementor     string
+		buildType       string
 		path            string
 		imageType       string
 		hasJdk          bool
@@ -341,6 +342,25 @@ func TestJvmPrimaryVendorProduct(t *testing.T) {
 			expectedProduct: "jre",
 		},
 		{
+			name:            "Oracle commercial build type with JRE",
+			implementor:     "",
+			buildType:       "commercial",
+			path:            "/usr/lib/jvm/jdk8/release",
+			imageType:       "JRE",
+			hasJdk:          false,
+			expectedVendor:  "oracle",
+			expectedProduct: "jre",
+		},
+		{
+			name:            "Oracle commercial build type with JDK",
+			implementor:     "",
+			buildType:       "commercial",
+			path:            "/usr/lib/jvm/jdk8/release",
+			hasJdk:          true,
+			expectedVendor:  "oracle",
+			expectedProduct: "jdk",
+		},
+		{
 			name:            "Oracle vendor with JDK in path",
 			implementor:     "",
 			path:            "/usr/lib/jvm/jdk-1.8-oracle-x64/release",
@@ -367,11 +387,29 @@ func TestJvmPrimaryVendorProduct(t *testing.T) {
 			expectedVendor:  "oracle", // corretto upstream is oracle openjdk
 			expectedProduct: "openjdk",
 		},
+		{
+			name:            "IBM JRE",
+			path:            "/opt/ibm/java/release",
+			expectedVendor:  "ibm",
+			expectedProduct: "java",
+		},
+		{
+			name:            "IBM JDK",
+			path:            "/opt/ibm/java/release",
+			hasJdk:          true,
+			expectedVendor:  "ibm",
+			expectedProduct: "java_sdk",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vendor, product := jvmPrimaryVendorProduct(tt.implementor, tt.path, tt.imageType, tt.hasJdk)
+			ri := pkg.JavaVMRelease{
+				Implementor: tt.implementor,
+				BuildType:   tt.buildType,
+				ImageType:   tt.imageType,
+			}
+			vendor, product := jvmPrimaryVendorProduct(&ri, tt.path, tt.hasJdk)
 			assert.Equal(t, tt.expectedVendor, vendor)
 			assert.Equal(t, tt.expectedProduct, product)
 		})
@@ -395,7 +433,7 @@ func TestJvmPurl(t *testing.T) {
 			version:      "21.0.4",
 			vendor:       "oracle",
 			product:      "jdk",
-			expectedPURL: "pkg:generic/oracle/jdk@21.0.4?repository_url=https://github.com/adoptium/temurin-build.git",
+			expectedPURL: "pkg:generic/oracle/jdk@21.0.4?repository_url=https%3A%2F%2Fgithub.com%2Fadoptium%2Ftemurin-build.git",
 		},
 		{
 			name: "source repo provided, no build source repo",
@@ -405,7 +443,7 @@ func TestJvmPurl(t *testing.T) {
 			version:      "21.0.4",
 			vendor:       "azul",
 			product:      "zulu",
-			expectedPURL: "pkg:generic/azul/zulu@21.0.4?repository_url=https://github.com/adoptium/jdk21u.git",
+			expectedPURL: "pkg:generic/azul/zulu@21.0.4?repository_url=https%3A%2F%2Fgithub.com%2Fadoptium%2Fjdk21u.git",
 		},
 		{
 			name: "no repository URLs provided",
@@ -425,7 +463,7 @@ func TestJvmPurl(t *testing.T) {
 			version:      "1.8.0_302",
 			vendor:       "oracle",
 			product:      "jre",
-			expectedPURL: "pkg:generic/oracle/jre@1.8.0_302?repository_url=https://github.com/adoptium/jre-repo.git",
+			expectedPURL: "pkg:generic/oracle/jre@1.8.0_302?repository_url=https%3A%2F%2Fgithub.com%2Fadoptium%2Fjre-repo.git",
 		},
 	}
 

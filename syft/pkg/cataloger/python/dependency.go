@@ -15,7 +15,7 @@ import (
 	"github.com/anchore/syft/syft/pkg/cataloger/internal/dependency"
 )
 
-func poetryLockDependencySpecifier(p pkg.Package) dependency.Specification {
+func poetryLockDependencySpecifier(p pkg.Package) dependency.Specification { //nolint:dupl // this is very similar to the uv lock dependency specifier, but should remain separate
 	meta, ok := p.Metadata.(pkg.PythonPoetryLockEntry)
 	if !ok {
 		log.Tracef("cataloger failed to extract poetry lock metadata for package %+v", p.Name)
@@ -82,6 +82,63 @@ func packageRef(name, extra string) string {
 	return cleanName + "[" + cleanExtra + "]"
 }
 
+func pdmLockDependencySpecifier(p pkg.Package) dependency.Specification {
+	meta, ok := p.Metadata.(pkg.PythonPdmLockEntry)
+	if !ok {
+		log.Tracef("cataloger failed to extract pdm lock metadata for package %+v", p.Name)
+		return dependency.Specification{}
+	}
+
+	// base package provides the package name without extras
+	provides := []string{p.Name}
+
+	// base requirements from Dependencies field
+	var requires []string
+	for _, dep := range meta.Dependencies {
+		depName := extractPackageName(dep)
+		if depName == "" {
+			continue
+		}
+		requires = append(requires, depName)
+	}
+
+	// create variants for each extras combination
+	var variants []dependency.ProvidesRequires
+	for _, extraVariant := range meta.Extras {
+		// each extra in the variant provides packagename[extra]
+		var variantProvides []string
+		for _, extra := range extraVariant.Extras {
+			variantProvides = append(variantProvides, packageRef(p.Name, extra))
+		}
+
+		// extract dependencies for this variant, excluding self-references
+		var variantRequires []string
+		for _, dep := range extraVariant.Dependencies {
+			depName := extractPackageName(dep)
+			if depName == "" || depName == p.Name {
+				// skip empty or self-references (e.g., coverage[toml] depends on coverage==7.4.1)
+				continue
+			}
+			variantRequires = append(variantRequires, depName)
+		}
+
+		if len(variantProvides) > 0 {
+			variants = append(variants, dependency.ProvidesRequires{
+				Provides: variantProvides,
+				Requires: variantRequires,
+			})
+		}
+	}
+
+	return dependency.Specification{
+		ProvidesRequires: dependency.ProvidesRequires{
+			Provides: provides,
+			Requires: requires,
+		},
+		Variants: variants,
+	}
+}
+
 func wheelEggDependencySpecifier(p pkg.Package) dependency.Specification {
 	meta, ok := p.Metadata.(pkg.PythonPackage)
 	if !ok {
@@ -115,15 +172,19 @@ func wheelEggDependencySpecifier(p pkg.Package) dependency.Specification {
 	}
 }
 
-// extractPackageName removes any extras or version constraints from a given Requires-Dist field value (and
-// semantically similar fields), leaving only the package name.
+// extractPackageName removes any extras, version constraints or environment markers from a dependency specifier string.
+// For example: "requests[security] >= 2.8.1 ; python_version < '3'" becomes "requests"
 func extractPackageName(s string) string {
 	// examples:
-	// html5lib ; extra == 'html5lib'   -->  html5lib
-	// soupsieve (>1.2)					-->  soupsieve
+	// requests [security,tests]		--> requests
+	// requests >= 2.8.1			--> requests
+	// requests (>= 2.8.1)			--> requests
+	// requests ; python_version < "2.7"	--> requests
 
-	return strings.TrimSpace(internal.SplitAny(s, "(;")[0])
+	return strings.TrimSpace(internal.SplitAny(s, "[(<!=>~;")[0])
 }
+
+// extractPackageNames applies extractPackageName to each string in the slice.
 func extractPackageNames(ss []string) []string {
 	var names []string
 	for _, s := range ss {

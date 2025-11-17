@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 
+	_ "modernc.org/sqlite" // required for rpmdb and other features
+
 	"github.com/anchore/syft/syft"
 	"github.com/anchore/syft/syft/format/syftjson"
 )
@@ -13,6 +15,7 @@ func main() {
 	image := "alpine:3.19"
 
 	src, _ := syft.GetSource(context.Background(), image, syft.DefaultGetSourceConfig().WithSources("registry"))
+	defer src.Close()
 
 	sbom, _ := syft.CreateSBOM(context.Background(), src, syft.DefaultCreateSBOMConfig())
 

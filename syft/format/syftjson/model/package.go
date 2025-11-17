@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/anchore/syft/internal/log"
+	"github.com/anchore/syft/internal/packagemetadata"
 	"github.com/anchore/syft/syft/file"
-	"github.com/anchore/syft/syft/internal/packagemetadata"
 	"github.com/anchore/syft/syft/license"
 	"github.com/anchore/syft/syft/pkg"
 )
@@ -36,28 +36,47 @@ type PackageBasicData struct {
 	PURL      string          `json:"purl"`
 }
 
+// cpes is a collection of Common Platform Enumeration identifiers for a package.
 type cpes []CPE
 
+// CPE represents a Common Platform Enumeration identifier used for matching packages to known vulnerabilities in security databases.
 type CPE struct {
-	Value  string `json:"cpe"`
+	// Value is the CPE string identifier.
+	Value string `json:"cpe"`
+
+	// Source is the source where this CPE was obtained or generated from.
 	Source string `json:"source,omitempty"`
 }
 
+// licenses is a collection of license findings associated with a package.
 type licenses []License
 
+// License represents software license information discovered for a package, including SPDX expressions and supporting evidence locations.
 type License struct {
-	Value          string          `json:"value"`
-	SPDXExpression string          `json:"spdxExpression"`
-	Type           license.Type    `json:"type"`
-	URLs           []string        `json:"urls"`
-	Locations      []file.Location `json:"locations"`
+	// Value is the raw license identifier or expression as found.
+	Value string `json:"value"`
+
+	// SPDXExpression is the parsed SPDX license expression.
+	SPDXExpression string `json:"spdxExpression"`
+
+	// Type is the license type classification (e.g., declared, concluded, discovered).
+	Type license.Type `json:"type"`
+
+	// URLs are URLs where license text or information can be found.
+	URLs []string `json:"urls"`
+
+	// Locations are file locations where this license was discovered.
+	Locations []file.Location `json:"locations"`
+
+	// Contents is the full license text content.
+	Contents string `json:"contents,omitempty"`
 }
 
 func newModelLicensesFromValues(licenses []string) (ml []License) {
 	for _, v := range licenses {
 		expression, err := license.ParseExpression(v)
 		if err != nil {
-			log.Trace("could not find valid spdx expression for %s: %w", v, err)
+			log.Tracef("could not find valid spdx expression for %s: %w", v, err)
 		}
 		ml = append(ml, License{
 			Value:          v,
@@ -203,5 +222,6 @@ func unpackPkgMetadata(p *Package, unpacker packageMetadataUnpacker) error {
 		}
 	}
 	p.Metadata = reflect.ValueOf(val).Elem().Interface()
+	p.MetadataType = ty
 	return nil
 }

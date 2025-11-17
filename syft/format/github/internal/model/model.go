@@ -1,11 +1,12 @@
 package model
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/mholt/archiver/v3"
+	"github.com/mholt/archives"
 
 	"github.com/anchore/packageurl-go"
 	"github.com/anchore/syft/internal/log"
@@ -88,6 +89,9 @@ func toGithubManifests(s *sbom.SBOM) Manifests {
 		}
 
 		name := dependencyName(p)
+		if name == "" || p.PURL == "" {
+			continue
+		}
 		manifest.Resolved[name] = DependencyNode{
 			PackageURL:   p.PURL,
 			Metadata:     toDependencyMetadata(p),
@@ -131,6 +135,11 @@ func toPath(s source.Description, p pkg.Package) string {
 				return fmt.Sprintf("%s/%s", path, packagePath)
 			}
 			return packagePath
+		case source.SnapMetadata:
+			if inputPath != "" {
+				return fmt.Sprintf("%s:/%s", inputPath, packagePath)
+			}
+			return packagePath
 		}
 	}
 	return inputPath
@@ -146,8 +155,8 @@ func trimRelative(s string) string {
 
 // isArchive returns true if the path appears to be an archive
 func isArchive(path string) bool {
-	_, err := archiver.ByExtension(path)
-	return err == nil
+	format, _, err := archives.Identify(context.Background(), path, nil)
+	return err == nil && format != nil
 }
 
 func toDependencies(s *sbom.SBOM, p pkg.Package) (out []string) {
@@ -165,7 +174,7 @@ func toDependencies(s *sbom.SBOM, p pkg.Package) (out []string) {
 func dependencyName(p pkg.Package) string {
 	purl, err := packageurl.FromString(p.PURL)
 	if err != nil {
-		log.Warnf("Invalid PURL for package: '%s' PURL: '%s' (%w)", p.Name, p.PURL, err)
+		log.Debugf("Invalid PURL for package: '%s' PURL: '%s' (%w)", p.Name, p.PURL, err)
 		return ""
 	}
 	// don't use qualifiers for this

@@ -9,8 +9,11 @@ import (
 
 // Coordinates contains the minimal information needed to describe how to find a file within any possible source object (e.g. image and directory sources)
 type Coordinates struct {
-	RealPath     string `json:"path" cyclonedx:"path"`                 // The path where all path ancestors have no hardlinks / symlinks
-	FileSystemID string `json:"layerID,omitempty" cyclonedx:"layerID"` // An ID representing the filesystem. For container images, this is a layer digest. For directories or a root filesystem, this is blank.
+	// RealPath is the canonical absolute form of the path accessed (all symbolic links have been followed and relative path components like '.' and '..' have been removed).
+	RealPath string `json:"path" cyclonedx:"path"`
+
+	// FileSystemID is an ID representing and entire filesystem. For container images, this is a layer digest. For directories or a root filesystem, this is blank.
+	FileSystemID string `json:"layerID,omitempty" cyclonedx:"layerID"`
 }
 
 func NewCoordinates(realPath, fsID string) Coordinates {
@@ -24,7 +27,7 @@ func (c Coordinates) ID() artifact.ID {
 	f, err := artifact.IDByHash(c)
 	if err != nil {
 		// TODO: what to do in this case?
-		log.Warnf("unable to get fingerprint of location coordinate=%+v: %+v", c, err)
+		log.Debugf("unable to get fingerprint of location coordinate=%+v: %+v", c, err)
 		return ""
 	}
 
@@ -38,4 +41,8 @@ func (c Coordinates) String() string {
 		str += fmt.Sprintf(" Layer=%q", c.FileSystemID)
 	}
 	return fmt.Sprintf("Location<%s>", str)
+}
+
+func (c Coordinates) GetCoordinates() Coordinates {
+	return c
 }

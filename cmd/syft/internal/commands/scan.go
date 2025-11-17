@@ -10,9 +10,10 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/anchore/clio"
+	"github.com/anchore/fangs"
 	"github.com/anchore/go-collections"
 	"github.com/anchore/stereoscope"
 	"github.com/anchore/stereoscope/pkg/image"
@@ -109,7 +110,7 @@ func (o *scanOptions) PostLoad() error {
 }
 
 func (o *scanOptions) validateLegacyOptionsNotUsed() error {
-	if o.Config.ConfigFile == "" {
+	if len(fangs.Flatten(o.ConfigFile)) == 0 {
 		return nil
 	}
 
@@ -121,32 +122,33 @@ func (o *scanOptions) validateLegacyOptionsNotUsed() error {
 		File                            any     `yaml:"file" json:"file" mapstructure:"file"`
 	}
 
-	by, err := os.ReadFile(o.Config.ConfigFile)
-	if err != nil {
-		return fmt.Errorf("unable to read config file during validations %q: %w", o.Config.ConfigFile, err)
-	}
+	for _, f := range fangs.Flatten(o.ConfigFile) {
+		by, err := os.ReadFile(f)
+		if err != nil {
+			return fmt.Errorf("unable to read config file during validations %q: %w", f, err)
+		}
 
-	var legacy legacyConfig
-	if err := yaml.Unmarshal(by, &legacy); err != nil {
-		return fmt.Errorf("unable to parse config file during validations %q: %w", o.Config.ConfigFile, err)
-	}
+		var legacy legacyConfig
+		if err := yaml.Unmarshal(by, &legacy); err != nil {
+			return fmt.Errorf("unable to parse config file during validations %q: %w", f, err)
+		}
 
-	if legacy.DefaultImagePullSource != nil {
-		return fmt.Errorf("the config file option 'default-image-pull-source' has been removed, please use 'source.image.default-pull-source' instead")
-	}
+		if legacy.DefaultImagePullSource != nil {
+			return fmt.Errorf("the config file option 'default-image-pull-source' has been removed, please use 'source.image.default-pull-source' instead")
+		}
 
-	if legacy.ExcludeBinaryOverlapByOwnership != nil {
-		return fmt.Errorf("the config file option 'exclude-binary-overlap-by-ownership' has been removed, please use 'package.exclude-binary-overlap-by-ownership' instead")
-	}
+		if legacy.ExcludeBinaryOverlapByOwnership != nil {
+			return fmt.Errorf("the config file option 'exclude-binary-overlap-by-ownership' has been removed, please use 'package.exclude-binary-overlap-by-ownership' instead")
+		}
 
-	if legacy.BasePath != nil {
-		return fmt.Errorf("the config file option 'base-path' has been removed, please use 'source.base-path' instead")
-	}
+		if legacy.BasePath != nil {
+			return fmt.Errorf("the config file option 'base-path' has been removed, please use 'source.base-path' instead")
+		}
 
-	if legacy.File != nil && reflect.TypeOf(legacy.File).Kind() == reflect.String {
-		return fmt.Errorf("the config file option 'file' has been removed, please use 'outputs' instead")
+		if legacy.File != nil && reflect.TypeOf(legacy.File).Kind() == reflect.String {
+			return fmt.Errorf("the config file option 'file' has been removed, please use 'outputs' instead")
+		}
 	}
-
 	return nil
 }
 
@@ -154,13 +156,13 @@ func validateScanArgs(cmd *cobra.Command, args []string) error {
 	return validateArgs(cmd, args, "an image/directory argument is required")
 }
 
-func validateArgs(cmd *cobra.Command, args []string, error string) error {
+func validateArgs(cmd *cobra.Command, args []string, err string) error {
 	if len(args) == 0 {
 		// in the case that no arguments are given we want to show the help text and return with a non-0 return code.
 		if err := cmd.Help(); err != nil {
 			return fmt.Errorf("unable to display help: %w", err)
 		}
-		return fmt.Errorf("%v", error)
+		return fmt.Errorf("%v", err)
 	}
 
 	return cobra.MaximumNArgs(1)(cmd, args)
@@ -185,7 +187,6 @@ func runScan(ctx context.Context, id clio.Identification, opts *scanOptions, use
 	log.Debug("#############, explicitSource", sources)
 
 	src, err := getSource(ctx, &opts.Catalog, userInput, sources...)
-
 	if err != nil {
 		return err
 	}
@@ -218,8 +219,9 @@ func getSource(ctx context.Context, opts *options.Catalog, userInput string, sou
 	cfg := syft.DefaultGetSourceConfig().
 		WithRegistryOptions(opts.Registry.ToOptions()).
 		WithAlias(source.Alias{
-			Name:    opts.Source.Name,
-			Version: opts.Source.Version,
+			Name:     opts.Source.Name,
+			Version:  opts.Source.Version,
+			Supplier: opts.Source.Supplier,
 		}).
 		WithExcludeConfig(source.ExcludeConfig{
 			Paths: opts.Exclusions,

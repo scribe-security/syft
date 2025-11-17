@@ -3,17 +3,20 @@ package binary
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/pkg"
 	"github.com/anchore/syft/syft/pkg/cataloger/internal/pkgtest"
 )
 
-func Test_ELF_Package_Cataloger(t *testing.T) {
+func Test_ELFPackageCataloger(t *testing.T) {
 
 	cases := []struct {
 		name     string
 		fixture  string
 		expected []pkg.Package
+		wantErr  require.ErrorAssertionFunc
 	}{
 		{
 			name:    "go case",
@@ -63,6 +66,7 @@ func Test_ELF_Package_Cataloger(t *testing.T) {
 					},
 				},
 			},
+			wantErr: require.Error,
 		},
 		{
 			name:    "fedora 64 bit binaries",
@@ -116,6 +120,7 @@ func Test_ELF_Package_Cataloger(t *testing.T) {
 				WithImageResolver(t, v.fixture).
 				IgnoreLocationLayer(). // this fixture can be rebuilt, thus the layer ID will change
 				Expects(v.expected, nil).
+				WithErrorAssertion(v.wantErr).
 				TestCataloger(t, NewELFPackageCataloger())
 		})
 	}

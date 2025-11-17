@@ -9,10 +9,11 @@ import (
 	"unicode"
 
 	pep440 "github.com/aquasecurity/go-pep440-version"
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 
 	"github.com/anchore/syft/internal"
 	"github.com/anchore/syft/internal/log"
+	"github.com/anchore/syft/internal/unknown"
 	"github.com/anchore/syft/syft/artifact"
 	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/pkg"
@@ -82,18 +83,21 @@ func newRequirement(raw string) *unprocessedRequirement {
 }
 
 type requirementsParser struct {
-	guessUnpinnedRequirements bool
+	cfg             CatalogerConfig
+	licenseResolver pythonLicenseResolver
 }
 
 func newRequirementsParser(cfg CatalogerConfig) requirementsParser {
 	return requirementsParser{
-		guessUnpinnedRequirements: cfg.GuessUnpinnedRequirements,
+		cfg:             cfg,
+		licenseResolver: newPythonLicenseResolver(cfg),
 	}
 }
 
 // parseRequirementsTxt takes a Python requirements.txt file, returning all Python packages that are locked to a
 // specific version.
-func (rp requirementsParser) parseRequirementsTxt(_ context.Context, _ file.Resolver, _ *generic.Environment, reader file.LocationReadCloser) ([]pkg.Package, []artifact.Relationship, error) {
+func (rp requirementsParser) parseRequirementsTxt(ctx context.Context, _ file.Resolver, _ *generic.Environment, reader file.LocationReadCloser) ([]pkg.Package, []artifact.Relationship, error) {
+	var errs error
 	var packages []pkg.Package
 
 	scanner := bufio.NewScanner(reader)
@@ -125,21 +129,25 @@ func (rp requirementsParser) parseRequirementsTxt(_ context.Context, _ file.Reso
 
 		req := newRequirement(line)
 		if req == nil {
-			log.WithFields("path", reader.RealPath).Warnf("unable to parse requirements.txt line: %q", line)
+			log.WithFields("path", reader.RealPath, "line", line).Debug("unable to parse requirements.txt line")
+			errs = unknown.Appendf(errs, reader, "unable to parse requirements.txt line: %q", line)
 			continue
 		}
 
 		name := removeExtras(req.Name)
-		version := parseVersion(req.VersionConstraint, rp.guessUnpinnedRequirements)
+		version := parseVersion(req.VersionConstraint, rp.cfg.GuessUnpinnedRequirements)
 
 		if version == "" {
-			log.WithFields("path", reader.RealPath).Tracef("unable to determine package version in requirements.txt line: %q", line)
+			log.WithFields("path", reader.RealPath, "line", line).Trace("unable to determine package version in requirements.txt line")
+			errs = unknown.Appendf(errs, reader, "unable to determine package version in requirements.txt line: %q", line)
 			continue
 		}
 
 		packages = append(
 			packages,
 			newPackageForRequirementsWithMetadata(
+				ctx,
+				rp.licenseResolver,
 				name,
 				version,
 				pkg.PythonRequirementsEntry{
@@ -149,7 +157,7 @@ func (rp requirementsParser) parseRequirementsTxt(_ context.Context, _ file.Reso
 					URL:               parseURL(req.URL),
 					Markers:           req.Markers,
 				},
-				reader.Location.WithAnnotation(pkg.EvidenceAnnotationKey, pkg.PrimaryEvidenceAnnotation),
+				reader.WithAnnotation(pkg.EvidenceAnnotationKey, pkg.PrimaryEvidenceAnnotation),
 			),
 		)
 	}
@@ -158,7 +166,7 @@ func (rp requirementsParser) parseRequirementsTxt(_ context.Context, _ file.Reso
 		return nil, nil, fmt.Errorf("failed to parse python requirements file: %w", err)
 	}
 
-	return packages, nil, nil
+	return packages, nil, unknown.Join(errs, unknown.IfEmptyf(packages, "unable to determine packages"))
 }
 
 func parseVersion(version string, guessFromConstraint bool) string {

@@ -6,9 +6,11 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/scylladb/go-set/strset"
 
@@ -180,14 +182,14 @@ func candidateTargetSw(p pkg.Package) []string {
 	return []string{cpe.Any}
 }
 
-//nolint:funlen
 func candidateVendors(p pkg.Package) []string {
 	// in ecosystems where the packaging metadata does not have a clear field to indicate a vendor (or a field that
 	// could be interpreted indirectly as such) the project name tends to be a common stand in. Examples of this
 	// are the elasticsearch gem, xstream jar, and rack gem... all of these cases you can find vulnerabilities
 	// with CPEs where the vendor is the product name and doesn't appear to be derived from any available package
 	// metadata.
-	vendors := newFieldCandidateSet(candidateProducts(p)...)
+	vendors := newFieldCandidateSet()
+	vendors.union(candidateProductSet(p))
 
 	switch p.Language {
 	case pkg.JavaScript:
@@ -208,7 +210,10 @@ func candidateVendors(p pkg.Package) []string {
 	}
 
 	switch p.Metadata.(type) {
-	case pkg.RpmDBEntry:
+	case pkg.DotnetDepsEntry, pkg.DotnetPackagesLockEntry, pkg.DotnetPortableExecutableEntry:
+		vendors.clear()
+		vendors.union(candidateVendorsForDotnet(p))
+	case pkg.RpmDBEntry, pkg.RpmArchive:
 		vendors.union(candidateVendorsForRPM(p))
 	case pkg.RubyGemspec:
 		vendors.union(candidateVendorsForRuby(p))
@@ -220,9 +225,17 @@ func candidateVendors(p pkg.Package) []string {
 		vendors.union(candidateVendorsForAPK(p))
 	case pkg.NpmPackage:
 		vendors.union(candidateVendorsForJavascript(p))
+	case pkg.PEBinary:
+		// Add PE-specific vendor hints (e.g. ghostscript -> artifex)
+		vendors.union(candidateVendorsForPE(p))
 	case pkg.WordpressPluginEntry:
 		vendors.clear()
 		vendors.union(candidateVendorsForWordpressPlugin(p))
+	}
+
+	if p.Type == pkg.BinaryPkg && endsWithNumber(p.Name) {
+		// add binary package digit-suffix variations (e.g. Qt5 -> Qt)
+		addBinaryPackageDigitVariations(vendors)
 	}
 
 	// We should no longer be generating vendor candidates with these values ["" and "*"]
@@ -257,18 +270,25 @@ func candidateVendors(p pkg.Package) []string {
 }
 
 func candidateProducts(p pkg.Package) []string {
+	return candidateProductSet(p).uniqueValues()
+}
+
+func candidateProductSet(p pkg.Package) fieldCandidateSet {
 	products := newFieldCandidateSet(p.Name)
 
 	_, hasJavaMetadata := p.Metadata.(pkg.JavaArchive)
 
 	switch {
-	case p.Language == pkg.Python:
+	case p.Language == pkg.Dotnet || p.Type == pkg.DotnetPkg:
+		products.clear()
+		products.union(candidateProductsForDotnet(p))
+	case p.Language == pkg.Python || p.Type == pkg.PythonPkg:
 		if !strings.HasPrefix(p.Name, "python") {
 			products.addValue("python-" + p.Name)
 		}
-	case p.Language == pkg.Java || hasJavaMetadata:
+	case p.Language == pkg.Java || hasJavaMetadata || p.Type == pkg.JavaPkg:
 		products.addValue(candidateProductsForJava(p)...)
-	case p.Language == pkg.Go:
+	case p.Language == pkg.Go || p.Type == pkg.GoModulePkg:
 		// replace all candidates with only the golang-specific helper
 		products.clear()
 
@@ -276,13 +296,18 @@ func candidateProducts(p pkg.Package) []string {
 		if prod != "" {
 			products.addValue(prod)
 		}
+	case p.Type == pkg.BinaryPkg && endsWithNumber(p.Name):
+		// add binary package digit-suffix variations (e.g. Qt5 -> Qt)
+		addBinaryPackageDigitVariations(products)
 	}
 
-	if _, hasAPKMetadata := p.Metadata.(pkg.ApkDBEntry); hasAPKMetadata {
+	switch p.Metadata.(type) {
+	case pkg.ApkDBEntry:
 		products.union(candidateProductsForAPK(p))
-	}
-
-	if _, hasWordpressMetadata := p.Metadata.(pkg.WordpressPluginEntry); hasWordpressMetadata {
+	case pkg.PEBinary:
+		// Add PE-specific product hints (e.g. ghostscript)
+		products.union(candidateProductsForPE(p))
+	case pkg.WordpressPluginEntry:
 		products.clear()
 		products.union(candidateProductsForWordpressPlugin(p))
 	}
@@ -300,7 +325,7 @@ func candidateProducts(p pkg.Package) []string {
 	// remove known candidate removals
 	products.removeByValue(findProductsToRemove(defaultCandidateRemovals, p.Type, p.Name)...)
 
-	return products.uniqueValues()
+	return products
 }
 
 func addAllSubSelections(fields fieldCandidateSet) {
@@ -394,4 +419,34 @@ func addDelimiterVariations(fields fieldCandidateSet) {
 			fields.add(hyphenCandidate)
 		}
 	}
+}
+
+// removeTrailingDigits removes all trailing digits from a string
+func removeTrailingDigits(s string) string {
+	re := regexp.MustCompile(`\d+$`)
+	return re.ReplaceAllString(s, "")
+}
+
+// addBinaryPackageDigitVariations adds variations with trailing digits removed for binary packages.For binary package types only, when the name ends with a digit, add a new variation with all suffix-digits removed (e.g. Qt5 -> Qt). This helps generate additional CPE permutations for better vulnerability matching.
+func addBinaryPackageDigitVariations(fields fieldCandidateSet) {
+	candidatesForVariations := fields.copy()
+	for _, candidate := range candidatesForVariations.values() {
+		// Check if the candidate ends with a digit
+		if len(candidate) > 0 && candidate[len(candidate)-1] >= '0' && candidate[len(candidate)-1] <= '9' {
+			// Create variation with all suffix digits removed
+			withoutDigits := removeTrailingDigits(candidate)
+			if withoutDigits != "" && withoutDigits != candidate {
+				fields.addValue(withoutDigits)
+			}
+		}
+	}
+}
+
+func endsWithNumber(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	r := []rune(s)
+	last := r[len(r)-1]
+	return unicode.IsDigit(last)
 }

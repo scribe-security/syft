@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"os"
 
+	_ "modernc.org/sqlite" // required for rpmdb and other features
+
 	"github.com/anchore/syft/syft"
+	"github.com/anchore/syft/syft/cataloging"
 	"github.com/anchore/syft/syft/cataloging/pkgcataloging"
 	"github.com/anchore/syft/syft/sbom"
 	"github.com/anchore/syft/syft/source"
@@ -16,6 +19,7 @@ const defaultImage = "alpine:3.19"
 func main() {
 	// automagically get a source.Source for arbitrary string input
 	src := getSource(imageReference())
+	defer src.Close()
 
 	// catalog the given source and return a SBOM
 	// let's explicitly use catalogers that are:
@@ -29,7 +33,6 @@ func main() {
 	if err := enc.Encode(sbom.Descriptor.Configuration); err != nil {
 		panic(err)
 	}
-
 }
 
 func imageReference() string {
@@ -42,7 +45,6 @@ func imageReference() string {
 
 func getSource(input string) source.Source {
 	src, err := syft.GetSource(context.Background(), input, nil)
-
 	if err != nil {
 		panic(err)
 	}
@@ -55,7 +57,7 @@ func getSBOM(src source.Source, defaultTags ...string) sbom.SBOM {
 		WithCatalogerSelection(
 			// here you can sub-select, add, remove catalogers from the default selection...
 			// or replace the default selection entirely!
-			pkgcataloging.NewSelectionRequest().
+			cataloging.NewSelectionRequest().
 				WithDefaults(defaultTags...),
 		)
 

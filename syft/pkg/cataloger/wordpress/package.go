@@ -1,11 +1,14 @@
 package wordpress
 
 import (
+	"context"
+
 	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/pkg"
+	"github.com/anchore/syft/syft/pkg/cataloger/internal/licenses"
 )
 
-func newWordpressPluginPackage(name, version string, m pluginData, location file.Location) pkg.Package {
+func newWordpressPluginPackage(ctx context.Context, resolver file.Resolver, name, version string, m pluginData, location file.Location) pkg.Package {
 	meta := pkg.WordpressPluginEntry{
 		PluginInstallDirectory: m.PluginInstallDirectory,
 		Author:                 m.Author,
@@ -22,7 +25,9 @@ func newWordpressPluginPackage(name, version string, m pluginData, location file
 	}
 
 	if len(m.Licenses) > 0 {
-		p.Licenses = pkg.NewLicenseSet(pkg.NewLicense(m.Licenses[0]))
+		p.Licenses = pkg.NewLicenseSet(pkg.NewLicenseWithContext(ctx, m.Licenses[0]))
+	} else {
+		p = licenses.RelativeToPackage(ctx, resolver, p)
 	}
 
 	p.SetID()

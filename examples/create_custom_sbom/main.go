@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
+	_ "modernc.org/sqlite" // required for rpmdb and other features
 
 	"github.com/anchore/syft/syft"
 	"github.com/anchore/syft/syft/cataloging"
@@ -22,6 +23,7 @@ const defaultImage = "alpine:3.19"
 func main() {
 	// automagically get a source.Source for arbitrary string input
 	src := getSource(imageReference())
+	defer src.Close()
 
 	// will catalog the given source and return a SBOM keeping in mind several configurable options
 	sbom := getSBOM(src)
@@ -45,7 +47,6 @@ func getSource(input string) source.Source {
 	fmt.Println("detecting source type for input:", input, "...")
 
 	src, err := syft.GetSource(context.Background(), input, nil)
-
 	if err != nil {
 		panic(err)
 	}
@@ -74,7 +75,7 @@ func getSBOM(src source.Source) sbom.SBOM {
 		// only use OS related catalogers that would have been used with the kind of
 		// source type (container image or directory), but also add a specific python cataloger
 		WithCatalogerSelection(
-			pkgcataloging.NewSelectionRequest().
+			cataloging.NewSelectionRequest().
 				WithSubSelections("os").
 				WithAdditions("python-package-cataloger"),
 		).
@@ -124,5 +125,4 @@ func showAlpineConfiguration(s sbom.SBOM) {
 		panic(err)
 	}
 	fmt.Println(string(meta))
-
 }

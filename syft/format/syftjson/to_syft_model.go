@@ -16,6 +16,7 @@ import (
 	"github.com/anchore/syft/syft/artifact"
 	"github.com/anchore/syft/syft/cpe"
 	"github.com/anchore/syft/syft/file"
+	"github.com/anchore/syft/syft/format/internal"
 	"github.com/anchore/syft/syft/format/syftjson/model"
 	"github.com/anchore/syft/syft/linux"
 	"github.com/anchore/syft/syft/pkg"
@@ -38,7 +39,8 @@ func toSyftModel(doc model.Document) *sbom.SBOM {
 			FileContents:      fileArtifacts.FileContents,
 			FileLicenses:      fileArtifacts.FileLicenses,
 			Executables:       fileArtifacts.Executables,
-			LinuxDistribution: toSyftLinuxRelease(doc.Distro),
+			Unknowns:          fileArtifacts.Unknowns,
+			LinuxDistribution: toInternalLinuxRelease(doc.Distro),
 		},
 		Source:        *toSyftSourceData(doc.Source),
 		Descriptor:    toSyftDescriptor(doc.Descriptor),
@@ -66,6 +68,7 @@ func deduplicateErrors(errors []error) []string {
 	return errorMessages
 }
 
+//nolint:funlen
 func toSyftFiles(files []model.File) sbom.Artifacts {
 	ret := sbom.Artifacts{
 		FileMetadata: make(map[file.Coordinates]file.Metadata),
@@ -73,6 +76,7 @@ func toSyftFiles(files []model.File) sbom.Artifacts {
 		FileContents: make(map[file.Coordinates]string),
 		FileLicenses: make(map[file.Coordinates][]file.License),
 		Executables:  make(map[file.Coordinates]file.Executable),
+		Unknowns:     make(map[file.Coordinates][]string),
 	}
 
 	for _, f := range files {
@@ -130,19 +134,22 @@ func toSyftFiles(files []model.File) sbom.Artifacts {
 		if f.Executable != nil {
 			ret.Executables[coord] = *f.Executable
 		}
+
+		if len(f.Unknowns) > 0 {
+			ret.Unknowns[coord] = f.Unknowns
+		}
 	}
 
 	return ret
 }
 
 func safeFileModeConvert(val int) (fs.FileMode, error) {
-	if val < math.MinInt32 || val > math.MaxInt32 {
-		// Value is out of the range that int32 can represent
+	mode, err := strconv.ParseInt(strconv.Itoa(val), 8, 64)
+	if mode < 0 || mode > math.MaxUint32 {
+		// value is out of the range that int32 can represent
 		return 0, fmt.Errorf("value %d is out of the range that int32 can represent", val)
 	}
 
-	// Safe to convert to os.FileMode
-	mode, err := strconv.ParseInt(strconv.Itoa(val), 8, 64)
 	if err != nil {
 		return 0, err
 	}
@@ -157,6 +164,7 @@ func toSyftLicenses(m []model.License) (p []pkg.License) {
 			Type:           l.Type,
 			URLs:           l.URLs,
 			Locations:      file.NewLocationSet(l.Locations...),
+			Contents:       l.Contents,
 		})
 	}
 	return
@@ -187,7 +195,7 @@ func toSyftFileType(ty string) stereoscopeFile.Type {
 	}
 }
 
-func toSyftLinuxRelease(d model.LinuxRelease) *linux.Release {
+func toInternalLinuxRelease(d model.LinuxRelease) *linux.Release {
 	if cmp.Equal(d, model.LinuxRelease{}) {
 		return nil
 	}
@@ -210,6 +218,7 @@ func toSyftLinuxRelease(d model.LinuxRelease) *linux.Release {
 		PrivacyPolicyURL: d.PrivacyPolicyURL,
 		CPEName:          d.CPEName,
 		SupportEnd:       d.SupportEnd,
+		ExtendedSupport:  d.ExtendedSupport,
 	}
 }
 
@@ -220,7 +229,7 @@ func toSyftRelationships(doc *model.Document, catalog *pkg.Collection, relations
 		idMap[string(p.ID())] = p
 		locations := p.Locations.ToSlice()
 		for _, l := range locations {
-			idMap[string(l.Coordinates.ID())] = l.Coordinates
+			idMap[string(l.ID())] = l.Coordinates
 		}
 	}
 
@@ -306,6 +315,7 @@ func toSyftSourceData(s model.Source) *source.Description {
 		ID:       s.ID,
 		Name:     s.Name,
 		Version:  s.Version,
+		Supplier: s.Supplier,
 		Metadata: s.Metadata,
 	}
 }
@@ -343,9 +353,9 @@ func toSyftPackage(p model.Package, idAliases map[string]string) pkg.Package {
 		Metadata:  p.Metadata,
 	}
 
-	// we don't know if this package ID is truly unique, however, we need to trust the user input in case there are
-	// external references to it. That is, we can't derive our own ID (using pkg.SetID()) since consumers won't
-	// be able to historically interact with data that references the IDs from the original SBOM document being decoded now.
+	internal.Backfill(&out)
+
+	// always prefer the IDs from the SBOM over derived IDs
 	out.OverrideID(artifact.ID(p.ID))
 
 	// this alias mapping is currently defunct, but could be useful in the future.

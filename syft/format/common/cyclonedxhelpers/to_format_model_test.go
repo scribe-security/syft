@@ -9,7 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	stfile "github.com/anchore/stereoscope/pkg/file"
 	"github.com/anchore/syft/syft/artifact"
+	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/format/internal/cyclonedxutil/helpers"
 	"github.com/anchore/syft/syft/linux"
 	"github.com/anchore/syft/syft/pkg"
@@ -143,6 +145,178 @@ func Test_relationships(t *testing.T) {
 	}
 }
 
+func Test_FileComponents(t *testing.T) {
+	p1 := pkg.Package{
+		Name: "p1",
+	}
+	tests := []struct {
+		name string
+		sbom sbom.SBOM
+		want []cyclonedx.Component
+	}{
+		{
+			name: "sbom coordinates with file metadata are serialized to cdx along with packages",
+			sbom: sbom.SBOM{
+				Artifacts: sbom.Artifacts{
+					Packages: pkg.NewCollection(p1),
+					FileMetadata: map[file.Coordinates]file.Metadata{
+						{RealPath: "/test"}: {Path: "/test", Type: stfile.TypeRegular},
+					},
+					FileDigests: map[file.Coordinates][]file.Digest{
+						{RealPath: "/test"}: {
+							{
+								Algorithm: "sha256",
+								Value:     "xyz12345",
+							},
+						},
+					},
+				},
+			},
+			want: []cyclonedx.Component{
+				{
+					BOMRef: "2a1fc74ade23e357",
+					Type:   cyclonedx.ComponentTypeLibrary,
+					Name:   "p1",
+				},
+				{
+					BOMRef: "3f31cb2d98be6c1e",
+					Name:   "/test",
+					Type:   cyclonedx.ComponentTypeFile,
+					Hashes: &[]cyclonedx.Hash{
+						{Algorithm: "SHA-256", Value: "xyz12345"},
+					},
+				},
+			},
+		},
+		{
+			name: "sbom coordinates that don't contain metadata are not added to the final output",
+			sbom: sbom.SBOM{
+				Artifacts: sbom.Artifacts{
+					FileMetadata: map[file.Coordinates]file.Metadata{
+						{RealPath: "/test"}: {Path: "/test", Type: stfile.TypeRegular},
+					},
+					FileDigests: map[file.Coordinates][]file.Digest{
+						{RealPath: "/test"}: {
+							{
+								Algorithm: "sha256",
+								Value:     "xyz12345",
+							},
+						},
+						{RealPath: "/test-2"}: {
+							{
+								Algorithm: "sha256",
+								Value:     "xyz678910",
+							},
+						},
+					},
+				},
+			},
+			want: []cyclonedx.Component{
+				{
+					BOMRef: "3f31cb2d98be6c1e",
+					Name:   "/test",
+					Type:   cyclonedx.ComponentTypeFile,
+					Hashes: &[]cyclonedx.Hash{
+						{Algorithm: "SHA-256", Value: "xyz12345"},
+					},
+				},
+			},
+		},
+		{
+			name: "sbom coordinates that return hashes not covered by cdx only include valid digests",
+			sbom: sbom.SBOM{
+				Artifacts: sbom.Artifacts{
+					FileMetadata: map[file.Coordinates]file.Metadata{
+						{RealPath: "/test"}: {Path: "/test", Type: stfile.TypeRegular},
+					},
+					FileDigests: map[file.Coordinates][]file.Digest{
+						{RealPath: "/test"}: {
+							{
+								Algorithm: "xxh64",
+								Value:     "xyz12345",
+							},
+							{
+								Algorithm: "sha256",
+								Value:     "xyz678910",
+							},
+						},
+					},
+				},
+			},
+			want: []cyclonedx.Component{
+				{
+					BOMRef: "3f31cb2d98be6c1e",
+					Name:   "/test",
+					Type:   cyclonedx.ComponentTypeFile,
+					Hashes: &[]cyclonedx.Hash{
+						{Algorithm: "SHA-256", Value: "xyz678910"},
+					},
+				},
+			},
+		},
+		{
+			name: "sbom coordinates who's metadata is directory or symlink are skipped",
+			sbom: sbom.SBOM{
+				Artifacts: sbom.Artifacts{
+					FileMetadata: map[file.Coordinates]file.Metadata{
+						{RealPath: "/testdir"}: {
+							Path: "/testdir",
+							Type: stfile.TypeDirectory,
+						},
+						{RealPath: "/testsym"}: {
+							Path: "/testsym",
+							Type: stfile.TypeSymLink,
+						},
+						{RealPath: "/test"}: {Path: "/test", Type: stfile.TypeRegular},
+					},
+					FileDigests: map[file.Coordinates][]file.Digest{
+						{RealPath: "/test"}: {
+							{
+								Algorithm: "sha256",
+								Value:     "xyz12345",
+							},
+						},
+					},
+				},
+			},
+			want: []cyclonedx.Component{
+				{
+					BOMRef: "3f31cb2d98be6c1e",
+					Name:   "/test",
+					Type:   cyclonedx.ComponentTypeFile,
+					Hashes: &[]cyclonedx.Hash{
+						{Algorithm: "SHA-256", Value: "xyz12345"},
+					},
+				},
+			},
+		},
+		{
+			name: "sbom with no files serialized correctly",
+			sbom: sbom.SBOM{
+				Artifacts: sbom.Artifacts{
+					Packages: pkg.NewCollection(p1),
+				},
+			},
+			want: []cyclonedx.Component{
+				{
+					BOMRef: "2a1fc74ade23e357",
+					Type:   cyclonedx.ComponentTypeLibrary,
+					Name:   "p1",
+				},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cdx := ToFormatModel(test.sbom)
+			got := *cdx.Components
+			if diff := cmp.Diff(test.want, got); diff != "" {
+				t.Errorf("cdx file components mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func Test_toBomDescriptor(t *testing.T) {
 	type args struct {
 		name        string
@@ -215,7 +389,69 @@ func Test_toBomDescriptor(t *testing.T) {
 						Name:  "syft:image:labels:key1",
 						Value: "value1",
 					},
-				}},
+				},
+			},
+		},
+		{
+			name: "with optional supplier is on the root component and bom metadata",
+			args: args{
+				name:    "test-image",
+				version: "1.0.0",
+				srcMetadata: source.Description{
+					Name:     "test-image",
+					Version:  "1.0.0",
+					Supplier: "optional-supplier",
+					Metadata: source.ImageMetadata{},
+				},
+			},
+			want: &cyclonedx.Metadata{
+				Timestamp:  "",
+				Lifecycles: nil,
+				Tools: &cyclonedx.ToolsChoice{
+					Components: &[]cyclonedx.Component{
+						{
+							Type:    cyclonedx.ComponentTypeApplication,
+							Author:  "anchore",
+							Name:    "test-image",
+							Version: "1.0.0",
+						},
+					},
+				},
+				Authors: nil,
+				Component: &cyclonedx.Component{
+					BOMRef:   "",
+					MIMEType: "",
+					Type:     "container",
+					Supplier: &cyclonedx.OrganizationalEntity{
+						Name: "optional-supplier",
+					},
+					Author:             "",
+					Publisher:          "",
+					Group:              "",
+					Name:               "test-image",
+					Version:            "1.0.0",
+					Description:        "",
+					Scope:              "",
+					Hashes:             nil,
+					Licenses:           nil,
+					Copyright:          "",
+					CPE:                "",
+					PackageURL:         "",
+					SWID:               nil,
+					Modified:           nil,
+					Pedigree:           nil,
+					ExternalReferences: nil,
+					Properties:         nil,
+					Components:         nil,
+					Evidence:           nil,
+					ReleaseNotes:       nil,
+				},
+				Manufacture: nil,
+				Supplier: &cyclonedx.OrganizationalEntity{
+					Name: "optional-supplier",
+				},
+				Licenses: nil,
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -306,6 +542,10 @@ func Test_toOsComponent(t *testing.T) {
 					Version: "myVersion",
 				},
 				Properties: &[]cyclonedx.Property{
+					{
+						Name:  "syft:distro:extendedSupport",
+						Value: "false",
+					},
 					{
 						Name:  "syft:distro:id",
 						Value: "myLinux",

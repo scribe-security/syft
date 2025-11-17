@@ -11,8 +11,6 @@ import (
 	"github.com/anchore/syft/syft/pkg/cataloger/generic"
 )
 
-const gradleLockfileGlob = "**/gradle.lockfile*"
-
 // lockfileDependency represents a single dependency in the gradle.lockfile file
 type lockfileDependency struct {
 	Group   string
@@ -63,7 +61,7 @@ func parseGradleLockfile(_ context.Context, _ file.Resolver, _ *generic.Environm
 			Name:    dep.Name,
 			Version: dep.Version,
 			Locations: file.NewLocationSet(
-				reader.Location.WithAnnotation(pkg.EvidenceAnnotationKey, pkg.PrimaryEvidenceAnnotation),
+				reader.WithAnnotation(pkg.EvidenceAnnotationKey, pkg.PrimaryEvidenceAnnotation),
 			),
 			Language: pkg.Java,
 			Type:     pkg.JavaPkg,

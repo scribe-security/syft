@@ -61,6 +61,11 @@ test_negative_snapshot_download_asset() {
 }
 
 test_sboms_have_packages() {
+  if ! command -v jq &> /dev/null; then
+    echo "jq command not found. Please install jq or ensure it is in your PATH."
+    exit 1
+  fi
+
   find "$(snapshot_dir)/" -name "*.sbom" -print0 | while IFS= read -r -d '' file; do
       count=$(cat "$file" | jq ".artifacts | length")
       if [ "$count" -lt 80 ]; then
@@ -99,6 +104,8 @@ run_test_case test_positive_snapshot_download_asset "darwin" "arm64" "tar.gz"
 
 run_test_case test_positive_snapshot_download_asset "windows" "amd64" "sbom"
 run_test_case test_positive_snapshot_download_asset "windows" "amd64" "zip"
+run_test_case test_positive_snapshot_download_asset "windows" "arm64" "sbom"
+run_test_case test_positive_snapshot_download_asset "windows" "arm64" "zip"
 # note: the mac signing process produces a dmg which is not part of the snapshot process (thus is not exercised here)
 
 # let's make certain we covered all assets that were expected

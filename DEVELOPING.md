@@ -27,7 +27,7 @@ Also double check that the docker context being used is the default context. If 
 
 `docker context use default`
 
-After cloning the following step can help you get setup:
+After cloning, the following steps can help you get setup:
 1. run `make bootstrap` to download go mod dependencies, create the `/.tmp` dir, and download helper utilities.
 2. run `make` to view the selection of developer commands in the Makefile
 3. run `make build` to build the release snapshot binaries and packages
@@ -120,7 +120,7 @@ sequenceDiagram
     source-->>+sbom: add source to SBOM struct
     source-->>+catalog: pass src to generate catalog
     catalog-->-sbom: add cataloging results onto SBOM
-    sbom-->>encoder: pass SBOM and format desiered to syft encoder
+    sbom-->>encoder: pass SBOM and format desired to syft encoder
     encoder-->>source: return bytes that are the SBOM of the original input 
 
     Note right of catalog: cataloger configuration is done based on src
@@ -186,7 +186,7 @@ Cataloger names should be unique and named with the following rules of thumb in 
 - Use lowercase letters, numbers, and hyphens only
 - Use hyphens to separate words
 - Catalogers for language ecosystems should start with the language name (e.g. `python-` for a cataloger that raises up python packages)
-- Distinct between when the cataloger is searching for evidence of installed packages vs declared packages. For example, there are currently two different gemspec-based catalogers, the `ruby-gemspec-cataloger` and `ruby-installed-gemspec-cataloger`, where the latter requires that the gemspec is found within a `specifications` directory (which means it was installed, not just at the root of a source repo).
+- Distinguish between when the cataloger is searching for evidence of installed packages vs declared packages. For example, there are currently two different gemspec-based catalogers, the `ruby-gemspec-cataloger` and `ruby-installed-gemspec-cataloger`, where the latter requires that the gemspec is found within a `specifications` directory (which means it was installed, not just at the root of a source repo).
 
 #### Building a new Cataloger
 
@@ -226,6 +226,16 @@ rough outline how that works:
 3. By the time results reach the `pkg.Cataloger` you are guaranteed to have a set of unique files that exist in the layer(s) of interest (relative to what the resolver supports).
 
 ## Testing
+
+### Testing commands
+
+* `make help` shows a list of available commands
+* `make unit`, `make integration`, `make cli`, and `make acceptance` run those test suites (see below)
+* `make test` runs all those tests (and is therefore pretty slow)
+* `make fixtures` clears and re-fetches all test fixtures.
+* `go test ./syft/pkg/` for example can test particular packages, assuming fixtures are already made
+* `make clean-cache` cleans all test cache. Note that subsequent test runs will be slower after this
+
 
 ### Levels of testing
 
@@ -367,11 +377,11 @@ package under test and should always be updated by invoking `go test` on the spe
 update flag provided.
 
 Many of the `Format` tests make use of this approach, where the raw SBOM report is saved in the repo and the test 
-compares that SBOM with what is generated from the latest presenter code. For instance, at the time of this writing 
-the CycloneDX presenter snapshots can be updated by running:
+compares that SBOM with what is generated from the latest presenter code. The following command can be used to
+update the golden files for the various snapshot tests:
 
 ```bash
-go test ./internal/formats -update-cyclonedx
+make update-format-golden-files
 ```
 
 These flags are defined at the top of the test files that have tests that use the snapshot files.
